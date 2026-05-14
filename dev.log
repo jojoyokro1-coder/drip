@@ -1,0 +1,87 @@
+
+> nextjs-template@0.1.0 dev
+> next dev --turbopack
+
+▲ Next.js 16.2.6 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.137.1:3000
+- Environments: .env.local
+✓ Ready in 1019ms
+
+⨯ ./src/app/globals.css:3727:9
+Parsing CSS source code failed
+  [90m3725 |[0m   }
+  [90m3726 |[0m   .\[\&_\[�\[35m2[0m \[35m10[0m -[35m4[0m\[35m1[0m �\[35m2[0m p-heading\]\]\:px-[35m2[0m {
+[31m[1m>[0m [90m3727 |[0m     & [�-[35m4[0m�p-heading] {
+  [90m     |[0m        [31m[1m^[0m
+  [90m3728 |[0m       padding-inline: calc([36mvar[0m(--spacing) * [35m2[0m);
+  [90m3729 |[0m     }
+  [90m3730 |[0m   }
+
+Unexpected token in attribute selector: Delim('\u{2}')
+
+Generated code of PostCSS transform of file content of src/app/globals.css:
+./src/app/globals.css:3727:9
+  [90m3725 |[0m   }
+  [90m3726 |[0m   .\[\&_\[�\[35m2[0m \[35m10[0m -[35m4[0m\[35m1[0m �\[35m2[0m p-heading\]\]\:px-[35m2[0m {
+[31m[1m>[0m [90m3727 |[0m     & [�-[35m4[0m�p-heading] {
+  [90m     |[0m        [31m[1m^[0m
+  [90m3728 |[0m       padding-inline: calc([36mvar[0m(--spacing) * [35m2[0m);
+  [90m3729 |[0m     }
+  [90m3730 |[0m   }
+
+Import trace:
+  Client Component Browser:
+    ./src/app/globals.css [Client Component Browser]
+    ./src/app/layout.tsx [Server Component]
+
+
+
+./src/app/globals.css:3433:13
+Parsing CSS source code failed
+  [90m3431 |[0m   }
+  [90m3432 |[0m   .data-\[�\[35m7[0m �\[35m6[0m e\=checked\]\:bg-primary {
+[31m[1m>[0m [90m3433 |[0m     &[data-��e=[32m"checked"[0m] {
+  [90m     |[0m            [31m[1m^[0m
+  [90m3434 |[0m       background-color: [36mvar[0m(--primary);
+  [90m3435 |[0m     }
+  [90m3436 |[0m   }
+
+Unexpected token in attribute selector: Delim('\u{7}')
+
+Generated code of PostCSS transform of file content of src/app/globals.css:
+./src/app/globals.css:3433:13
+  [90m3431 |[0m   }
+  [90m3432 |[0m   .data-\[�\[35m7[0m �\[35m6[0m e\=checked\]\:bg-primary {
+[31m[1m>[0m [90m3433 |[0m     &[data-��e=[32m"checked"[0m] {
+  [90m     |[0m            [31m[1m^[0m
+  [90m3434 |[0m       background-color: [36mvar[0m(--primary);
+  [90m3435 |[0m     }
+  [90m3436 |[0m   }
+
+Import trace:
+  Client Component Browser:
+    ./src/app/globals.css [Client Component Browser]
+    ./src/app/layout.tsx [Server Component]
+
+
+ GET / 500 in 2.9s (next.js: 2.3s, proxy.ts: 303ms, application-code: 283ms)
+⨯ ./src/app/layout.tsx:7:1
+Module not found: Can't resolve './globals.css'
+  [90m 5 |[0m [36mimport[0m { [33mAuthProvider[0m } [36mfrom[0m [32m"@/hooks/useAuth"[0m;
+  [90m 6 |[0m
+[31m[1m>[0m [90m 7 |[0m [36mimport[0m [32m"./globals.css"[0m;
+  [90m   |[0m [31m[1m^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m 8 |[0m
+  [90m 9 |[0m [36mexport[0m [36mconst[0m metadata: [33mMetadata[0m = {
+  [90m10 |[0m   title: [32m"DRIP - Plateforme Mode Streetwear"[0m,
+
+
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+✓ Finished writing to filesystem cache in 31.6s
+✓ Compiled in 11.2s
+ GET / 200 in 1064ms (next.js: 508ms, proxy.ts: 149ms, application-code: 406ms)
+[?25h
