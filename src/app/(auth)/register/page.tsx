@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
-import { Loader2, Eye, EyeOff } from 'lucide-react';
+import { Loader2, Eye, EyeOff, Zap, AtSign, Mail, Lock } from 'lucide-react';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -20,147 +20,132 @@ export default function RegisterPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-
-    if (password !== confirmPassword) {
-      setError('Les mots de passe ne correspondent pas');
-      return;
-    }
-
-    if (password.length < 6) {
-      setError('Le mot de passe doit contenir au moins 6 caractères');
-      return;
-    }
-
-    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-      setError('Le pseudo ne peut contenir que des lettres, chiffres et underscores');
-      return;
-    }
-
+    if (password !== confirmPassword) { setError('Les mots de passe ne correspondent pas'); return; }
+    if (password.length < 6) { setError('Le mot de passe doit contenir au moins 6 caractères'); return; }
+    if (!/^[a-zA-Z0-9_]+$/.test(username)) { setError('Pseudo : lettres, chiffres et _ uniquement'); return; }
     setLoading(true);
-
     const { error } = await signUp(email, password, username);
+    if (error) { setError(error.message || "Erreur lors de l'inscription"); setLoading(false); }
+    else { router.push('/'); }
+  };
 
-    if (error) {
-      setError(error.message || 'Erreur lors de l\'inscription');
-      setLoading(false);
-    } else {
-      router.push('/');
-    }
+  const inputStyle = {
+    width: '100%', padding: '14px 16px 14px 44px',
+    background: 'rgba(255,255,255,0.05)',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: '14px', color: '#fff',
+    fontSize: '15px', outline: 'none',
+    boxSizing: 'border-box' as const,
+    fontFamily: "'Space Grotesk', system-ui, sans-serif",
+  };
+
+  const labelStyle = {
+    display: 'block', color: '#888', fontSize: '12px',
+    fontWeight: 600, letterSpacing: '0.08em',
+    textTransform: 'uppercase' as const, marginBottom: '8px',
+  };
+
+  const iconStyle = {
+    position: 'absolute' as const, left: '14px', top: '50%',
+    transform: 'translateY(-50%)', color: '#555', pointerEvents: 'none' as const,
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center px-4">
-      <div className="w-full max-w-md">
+    <div style={{
+      minHeight: '100vh',
+      background: '#050508',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: '24px 16px', position: 'relative', overflow: 'hidden',
+      fontFamily: "'Space Grotesk', system-ui, sans-serif",
+    }}>
+      {/* Glows */}
+      <div style={{ position: 'absolute', top: '-20%', right: '-10%', width: '500px', height: '500px', background: 'radial-gradient(circle, rgba(255,59,92,0.15) 0%, transparent 70%)', pointerEvents: 'none' }} />
+      <div style={{ position: 'absolute', bottom: '-20%', left: '-10%', width: '400px', height: '400px', background: 'radial-gradient(circle, rgba(120,40,200,0.12) 0%, transparent 70%)', pointerEvents: 'none' }} />
+      <div style={{ position: 'absolute', inset: 0, backgroundImage: 'linear-gradient(rgba(255,59,92,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,59,92,0.03) 1px, transparent 1px)', backgroundSize: '60px 60px', pointerEvents: 'none' }} />
+
+      <div style={{ width: '100%', maxWidth: '420px', position: 'relative', zIndex: 1 }}>
         {/* Logo */}
-        <div className="text-center mb-8">
-          <h1 className="text-5xl font-bold font-[family-name:var(--font-syne)] text-[#FF3B5C]">
-            DRIP
-          </h1>
-          <p className="text-[#888] mt-2 font-[family-name:var(--font-space-grotesk)]">
-            Crée ton compte
-          </p>
+        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+            <div style={{ width: '40px', height: '40px', background: 'linear-gradient(135deg, #FF3B5C, #c0135e)', borderRadius: '11px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 20px rgba(255,59,92,0.5)' }}>
+              <Zap size={20} color="white" fill="white" />
+            </div>
+            <h1 style={{ fontFamily: "'Syne', system-ui, sans-serif", fontSize: '38px', fontWeight: 800, background: 'linear-gradient(135deg, #ffffff 30%, #FF3B5C)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', margin: 0, letterSpacing: '-1px' }}>DRIP</h1>
+          </div>
+          <p style={{ color: '#666', fontSize: '14px', margin: 0 }}>Rejoins la communauté streetwear</p>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-5">
+        {/* Card */}
+        <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '24px', padding: '32px 28px', backdropFilter: 'blur(20px)', boxShadow: '0 32px 64px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06)' }}>
+          <h2 style={{ fontFamily: "'Syne', system-ui, sans-serif", fontSize: '20px', fontWeight: 700, color: '#fff', margin: '0 0 24px 0' }}>Créer un compte</h2>
+
           {error && (
-            <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-lg text-sm">
+            <div style={{ background: 'rgba(255,59,92,0.1)', border: '1px solid rgba(255,59,92,0.3)', color: '#FF3B5C', borderRadius: '12px', padding: '12px 16px', fontSize: '13px', marginBottom: '20px' }}>
               {error}
             </div>
           )}
 
-          <div className="space-y-2">
-            <label htmlFor="username" className="text-sm text-[#888] font-medium">
-              Pseudo
-            </label>
-            <input
-              id="username"
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value.toLowerCase())}
-              required
-              minLength={3}
-              maxLength={20}
-              className="w-full px-4 py-3 bg-[#141414] border border-[#2a2a2a] rounded-xl text-white placeholder-[#555] focus:outline-none focus:border-[#FF3B5C] focus:ring-1 focus:ring-[#FF3B5C] transition-colors font-[family-name:var(--font-space-grotesk)]"
-              placeholder="streetking"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label htmlFor="email" className="text-sm text-[#888] font-medium">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="w-full px-4 py-3 bg-[#141414] border border-[#2a2a2a] rounded-xl text-white placeholder-[#555] focus:outline-none focus:border-[#FF3B5C] focus:ring-1 focus:ring-[#FF3B5C] transition-colors font-[family-name:var(--font-space-grotesk)]"
-              placeholder="ton@email.com"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label htmlFor="password" className="text-sm text-[#888] font-medium">
-              Mot de passe
-            </label>
-            <div className="relative">
-              <input
-                id="password"
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
-                className="w-full px-4 py-3 bg-[#141414] border border-[#2a2a2a] rounded-xl text-white placeholder-[#555] focus:outline-none focus:border-[#FF3B5C] focus:ring-1 focus:ring-[#FF3B5C] transition-colors font-[family-name:var(--font-space-grotesk)] pr-12"
-                placeholder="Min. 6 caractères"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#888] hover:text-white transition-colors"
-              >
-                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-              </button>
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* Username */}
+            <div>
+              <label style={labelStyle}>Pseudo</label>
+              <div style={{ position: 'relative' }}>
+                <span style={iconStyle}><AtSign size={16} /></span>
+                <input type="text" value={username} onChange={(e) => setUsername(e.target.value.toLowerCase())} required minLength={3} maxLength={20} placeholder="streetking" style={inputStyle}
+                  onFocus={(e) => { e.target.style.borderColor = 'rgba(255,59,92,0.6)'; e.target.style.boxShadow = '0 0 0 3px rgba(255,59,92,0.1)'; }}
+                  onBlur={(e) => { e.target.style.borderColor = 'rgba(255,255,255,0.1)'; e.target.style.boxShadow = 'none'; }}
+                />
+              </div>
             </div>
-          </div>
 
-          <div className="space-y-2">
-            <label htmlFor="confirmPassword" className="text-sm text-[#888] font-medium">
-              Confirmer le mot de passe
-            </label>
-            <input
-              id="confirmPassword"
-              type={showPassword ? 'text' : 'password'}
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-              className="w-full px-4 py-3 bg-[#141414] border border-[#2a2a2a] rounded-xl text-white placeholder-[#555] focus:outline-none focus:border-[#FF3B5C] focus:ring-1 focus:ring-[#FF3B5C] transition-colors font-[family-name:var(--font-space-grotesk)]"
-              placeholder="Confirme ton mot de passe"
-            />
-          </div>
+            {/* Email */}
+            <div>
+              <label style={labelStyle}>Email</label>
+              <div style={{ position: 'relative' }}>
+                <span style={iconStyle}><Mail size={16} /></span>
+                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="ton@email.com" style={inputStyle}
+                  onFocus={(e) => { e.target.style.borderColor = 'rgba(255,59,92,0.6)'; e.target.style.boxShadow = '0 0 0 3px rgba(255,59,92,0.1)'; }}
+                  onBlur={(e) => { e.target.style.borderColor = 'rgba(255,255,255,0.1)'; e.target.style.boxShadow = 'none'; }}
+                />
+              </div>
+            </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-3.5 bg-[#FF3B5C] text-white font-semibold rounded-xl hover:bg-[#e63552] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-[family-name:var(--font-syne)]"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="animate-spin" size={20} />
-                Inscription...
-              </>
-            ) : (
-              'S\'inscrire'
-            )}
-          </button>
-        </form>
+            {/* Password */}
+            <div>
+              <label style={labelStyle}>Mot de passe</label>
+              <div style={{ position: 'relative' }}>
+                <span style={iconStyle}><Lock size={16} /></span>
+                <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} placeholder="Min. 6 caractères" style={{ ...inputStyle, paddingRight: '48px' }}
+                  onFocus={(e) => { e.target.style.borderColor = 'rgba(255,59,92,0.6)'; e.target.style.boxShadow = '0 0 0 3px rgba(255,59,92,0.1)'; }}
+                  onBlur={(e) => { e.target.style.borderColor = 'rgba(255,255,255,0.1)'; e.target.style.boxShadow = 'none'; }}
+                />
+                <button type="button" onClick={() => setShowPassword(!showPassword)} style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#666', cursor: 'pointer', padding: '4px' }}>
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
 
-        {/* Login link */}
-        <p className="text-center mt-6 text-[#888] font-[family-name:var(--font-space-grotesk)]">
+            {/* Confirm Password */}
+            <div>
+              <label style={labelStyle}>Confirmer</label>
+              <div style={{ position: 'relative' }}>
+                <span style={iconStyle}><Lock size={16} /></span>
+                <input type={showPassword ? 'text' : 'password'} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required placeholder="Répète ton mot de passe" style={inputStyle}
+                  onFocus={(e) => { e.target.style.borderColor = 'rgba(255,59,92,0.6)'; e.target.style.boxShadow = '0 0 0 3px rgba(255,59,92,0.1)'; }}
+                  onBlur={(e) => { e.target.style.borderColor = 'rgba(255,255,255,0.1)'; e.target.style.boxShadow = 'none'; }}
+                />
+              </div>
+            </div>
+
+            <button type="submit" disabled={loading} style={{ width: '100%', padding: '15px', background: loading ? 'rgba(255,59,92,0.5)' : 'linear-gradient(135deg, #FF3B5C, #c0135e)', border: 'none', borderRadius: '14px', color: '#fff', fontSize: '16px', fontWeight: 700, fontFamily: "'Syne', system-ui, sans-serif", cursor: loading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: loading ? 'none' : '0 8px 24px rgba(255,59,92,0.4)', marginTop: '8px', letterSpacing: '0.02em' }}>
+              {loading ? <><Loader2 size={18} className="animate-spin" /> Inscription...</> : "Créer mon compte →"}
+            </button>
+          </form>
+        </div>
+
+        <p style={{ textAlign: 'center', marginTop: '24px', color: '#555', fontSize: '14px' }}>
           Déjà un compte ?{' '}
-          <Link href="/login" className="text-[#FF3B5C] hover:underline font-medium">
+          <Link href="/login" style={{ color: '#FF3B5C', textDecoration: 'none', fontWeight: 600 }}>
             Se connecter
           </Link>
         </p>

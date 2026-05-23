@@ -41,3 +41,15 @@ export interface HashtagTrend {
   tag: string;
   count: number;
 }
+
+export interface Comment {
+  id: string;
+  user_id: string;
+  look_id: string;
+  content: string;
+  created_at: string;
+  profile?: {
+    username: string;
+    avatar_url: string;
+  };
+}

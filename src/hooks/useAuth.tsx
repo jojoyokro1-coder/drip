@@ -51,6 +51,72 @@ function toUser(local: LocalUser): User {
   } as User;
 }
 
+function normalizeEmail(email: string) {
+  return email.trim().toLowerCase();
+}
+
+function normalizeUsername(username: string) {
+  return username.trim().toLowerCase();
+}
+
+function readLocalUsers() {
+  const usersRaw = localStorage.getItem(LOCAL_USERS_KEY);
+  return usersRaw ? (JSON.parse(usersRaw) as LocalUser[]) : [];
+}
+
+function findLocalUser(login: string, password: string) {
+  const loginInput = login.trim().toLowerCase();
+  return readLocalUsers().find((u) => {
+    const emailMatch = u.email.toLowerCase() === loginInput;
+    const usernameMatch = u.username.toLowerCase() === loginInput;
+    return (emailMatch || usernameMatch) && u.password === password;
+  });
+}
+
+function saveLocalUser(localUser: LocalUser) {
+  const users = readLocalUsers();
+  const withoutDuplicate = users.filter(
+    (u) =>
+      u.id !== localUser.id &&
+      u.email.toLowerCase() !== localUser.email.toLowerCase() &&
+      u.username.toLowerCase() !== localUser.username.toLowerCase()
+  );
+
+  localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify([...withoutDuplicate, localUser]));
+  localStorage.setItem(LOCAL_CURRENT_USER_KEY, JSON.stringify(localUser));
+}
+
+function createLocalAuthUser(email: string, password: string, username: string) {
+  const users = readLocalUsers();
+  const emailLower = normalizeEmail(email);
+  const usernameLower = normalizeUsername(username);
+
+  if (users.some((u) => u.email.toLowerCase() === emailLower)) {
+    return { user: null, error: new Error('Cet email est deja utilise.') };
+  }
+
+  if (users.some((u) => u.username.toLowerCase() === usernameLower)) {
+    return { user: null, error: new Error('Ce pseudo est deja pris.') };
+  }
+
+  const id =
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+  const created: LocalUser = {
+    id,
+    email: emailLower,
+    password,
+    username: usernameLower,
+    bio: '',
+    avatar_url: '',
+  };
+
+  saveLocalUser(created);
+  return { user: created, error: null };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -96,49 +162,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signUp = async (email: string, password: string, username: string) => {
     try {
       if (!useSupabase) {
-        const usersRaw = localStorage.getItem(LOCAL_USERS_KEY);
-        const users: LocalUser[] = usersRaw ? JSON.parse(usersRaw) : [];
-
-        const emailLower = email.trim().toLowerCase();
-        const usernameLower = username.trim().toLowerCase();
-
-        if (users.some((u) => u.email.toLowerCase() === emailLower)) {
-          return { error: new Error('Cet email est deja utilise.') };
-        }
-        if (users.some((u) => u.username.toLowerCase() === usernameLower)) {
-          return { error: new Error('Ce pseudo est deja pris.') };
-        }
-
-        const created: LocalUser = {
-          id: crypto.randomUUID(),
-          email: emailLower,
-          password,
-          username: usernameLower,
-          bio: '',
-          avatar_url: '',
-        };
-
-        users.push(created);
-        localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(users));
-        localStorage.setItem(LOCAL_CURRENT_USER_KEY, JSON.stringify(created));
+        const { user: created, error } = createLocalAuthUser(email, password, username);
+        if (error || !created) return { error };
         setUser(toUser(created));
         setSession(null);
         return { error: null };
       }
 
+      const normalizedEmail = normalizeEmail(email);
+      const normalizedUsername = normalizeUsername(username);
+
       const response = await fetch("/api/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, username }),
+        body: JSON.stringify({ email: normalizedEmail, password, username: normalizedUsername }),
       });
 
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
+        if (data?.code === "SERVER_SUPABASE_NOT_CONFIGURED") {
+          const { user: localUser, error } = createLocalAuthUser(normalizedEmail, password, normalizedUsername);
+          if (error || !localUser) return { error };
+          setUser(toUser(localUser));
+          setSession(null);
+          return { error: null };
+        }
+
         return { error: new Error(data?.error || "Erreur lors de l'inscription") };
       }
 
       const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: email.trim().toLowerCase(),
+        email: normalizedEmail,
         password,
       });
 
@@ -148,33 +202,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       return { error: null };
     } catch (err) {
+      const { user: localUser, error } = createLocalAuthUser(email, password, username);
+      if (!error && localUser) {
+        setUser(toUser(localUser));
+        setSession(null);
+        return { error: null };
+      }
       return { error: err as Error };
     }
   };
 
   const signIn = async (email: string, password: string) => {
     try {
-      if (!useSupabase) {
-        const usersRaw = localStorage.getItem(LOCAL_USERS_KEY);
-        const users: LocalUser[] = usersRaw ? JSON.parse(usersRaw) : [];
-        const loginInput = email.trim().toLowerCase();
-        const found = users.find((u) => {
-          const emailMatch = u.email.toLowerCase() === loginInput;
-          const usernameMatch = u.username.toLowerCase() === loginInput;
-          return (emailMatch || usernameMatch) && u.password === password;
-        });
-
-        if (!found) {
-          return { error: new Error('Email/pseudo ou mot de passe incorrect.') };
-        }
-
-        localStorage.setItem(LOCAL_CURRENT_USER_KEY, JSON.stringify(found));
-        setUser(toUser(found));
+      const localUser = findLocalUser(email, password);
+      if (localUser) {
+        localStorage.setItem(LOCAL_CURRENT_USER_KEY, JSON.stringify(localUser));
+        setUser(toUser(localUser));
         setSession(null);
         return { error: null };
       }
 
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (!useSupabase) {
+        return { error: new Error('Email/pseudo ou mot de passe incorrect.') };
+      }
+
+      const normalizedEmail = normalizeEmail(email);
+      const { error } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
+
+      if (!error) {
+        return { error: null };
+      }
+
+      const message = error.message?.toLowerCase() || "";
+      if (message.includes("email not confirmed") || message.includes("not confirmed")) {
+        return {
+          error: new Error(
+            "Ton email Supabase n'est pas confirme. Verifie ta boite mail ou ajoute DATABASE_SERVICE_ROLE_KEY dans .env.local pour l'inscription serveur."
+          ),
+        };
+      }
+
       return { error: error as Error | null };
     } catch (err) {
       return { error: err as Error };
@@ -182,13 +249,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
+    localStorage.removeItem(LOCAL_CURRENT_USER_KEY);
+    setUser(null);
+    setSession(null);
+
     if (!useSupabase) {
-      localStorage.removeItem(LOCAL_CURRENT_USER_KEY);
-      setUser(null);
-      setSession(null);
       return;
     }
-    await supabase.auth.signOut();
+
+    try {
+      await supabase.auth.signOut({ scope: 'global' });
+    } catch {
+      // Keep local auth state cleared even if remote sign-out fails.
+    }
   };
 
   const updateLocalProfile = (profile: { username: string; bio: string; avatar_url: string }) => {

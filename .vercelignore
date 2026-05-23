@@ -1,6 +1,10 @@
+.git
 node_modules
 .next
 .next-build
 .next-run
-.env.local
-.vercel
+.vscode
+*.log
+*.zip
+*.DS
+*.cache

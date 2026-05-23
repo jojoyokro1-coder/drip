@@ -5,212 +5,221 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { supabase } from '@/integrations/supabase/client';
 import { UserAvatar } from '@/components/user-avatar';
-import { Trophy, Heart } from 'lucide-react';
-import { Loader2 } from 'lucide-react';
+import { Trophy, Heart, Loader2, Zap, Crown } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface TopLook {
   id: string;
   image_url: string;
   likes_count: number;
   description: string;
-  profile?: {
-    username: string;
-    avatar_url: string;
-  };
+  profile?: { username: string; avatar_url: string };
+}
+
+const MEDAL = [
+  { label: '1er', color: '#FFD700', shadow: 'rgba(255,215,0,0.4)', border: '#FFD700', size: 36 },
+  { label: '2e',  color: '#C0C0C0', shadow: 'rgba(192,192,192,0.3)', border: '#C0C0C0', size: 28 },
+  { label: '3e',  color: '#CD7F32', shadow: 'rgba(205,127,50,0.3)', border: '#CD7F32', size: 28 },
+];
+
+function RankingSkeleton() {
+  return (
+    <div style={{ minHeight: '100vh', background: '#050508', paddingBottom: '90px', fontFamily: "'Space Grotesk', system-ui, sans-serif" }}>
+      {/* Header Skeleton */}
+      <div style={{ position: 'relative', padding: '40px 16px 24px', textAlign: 'center', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', top: '-30%', left: '50%', transform: 'translateX(-50%)', width: '400px', height: '300px', background: 'radial-gradient(circle, rgba(255,193,7,0.06) 0%, transparent 70%)', pointerEvents: 'none' }} />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginBottom: '8px' }}>
+          <div style={{ width: '40px', height: '40px', background: 'rgba(255,193,7,0.1)', borderRadius: '11px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Trophy size={20} color="#FFC107" />
+          </div>
+          <Skeleton className="w-[100px] h-[28px] bg-muted/20" />
+        </div>
+        <Skeleton className="mx-auto w-[220px] h-[14px] bg-muted/20" />
+      </div>
+
+      {/* Podium Skeleton */}
+      <div style={{ padding: '0 16px 32px', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: '12px' }}>
+        {/* 2nd place */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', flex: '0 0 88px' }}>
+          <div style={{ width: '40px', height: '40px', borderRadius: '50%' }}>
+            <Skeleton className="w-[40px] h-[40px] rounded-full bg-muted/20" />
+          </div>
+          <div style={{ width: '100%', height: '120px', borderRadius: '12px', overflow: 'hidden', position: 'relative' }}>
+            <Skeleton className="w-full h-full bg-muted/20" />
+          </div>
+          <Skeleton className="w-[60px] h-[12px] bg-muted/20" />
+        </div>
+
+        {/* 1st place */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', flex: '0 0 110px' }}>
+          <Crown size={20} color="#FFD700" style={{ filter: 'drop-shadow(0 0 6px rgba(255,215,0,0.4))' }} />
+          <div style={{ width: '52px', height: '52px', borderRadius: '50%' }}>
+            <Skeleton className="w-[52px] h-[52px] rounded-full bg-muted/20" />
+          </div>
+          <div style={{ width: '100%', height: '150px', borderRadius: '12px', overflow: 'hidden', position: 'relative' }}>
+            <Skeleton className="w-full h-full bg-muted/20" />
+          </div>
+          <Skeleton className="w-[70px] h-[12px] bg-muted/20" />
+        </div>
+
+        {/* 3rd place */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', flex: '0 0 88px' }}>
+          <div style={{ width: '40px', height: '40px', borderRadius: '50%' }}>
+            <Skeleton className="w-[40px] h-[40px] rounded-full bg-muted/20" />
+          </div>
+          <div style={{ width: '100%', height: '100px', borderRadius: '12px', overflow: 'hidden', position: 'relative' }}>
+            <Skeleton className="w-full h-full bg-muted/20" />
+          </div>
+          <Skeleton className="w-[55px] h-[12px] bg-muted/20" />
+        </div>
+      </div>
+
+      {/* Complete ranking list skeleton */}
+      <div style={{ padding: '0 16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+          <Zap size={15} color="#FF3B5C" />
+          <Skeleton className="w-[140px] h-[16px] bg-muted/20" />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {[...Array(5)].map((_, index) => (
+            <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: '14px' }}>
+              <Skeleton className="w-[20px] h-[16px] bg-muted/20" />
+              <div style={{ width: '52px', height: '52px', borderRadius: '10px', overflow: 'hidden', flexShrink: 0 }}>
+                <Skeleton className="w-full h-full bg-muted/20" />
+              </div>
+              <div style={{ flex: 1 }}>
+                <Skeleton className="w-[100px] h-[14px] bg-muted/20 mb-2" />
+                <Skeleton className="w-[150px] h-[12px] bg-muted/20" />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                <Skeleton className="w-[44px] h-[18px] bg-muted/20" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function RankingPage() {
   const [looks, setLooks] = useState<TopLook[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadTopLooks();
-  }, []);
+  useEffect(() => { loadTopLooks(); }, []);
 
   const loadTopLooks = async () => {
     try {
-      // Get looks from last 7 days with likes_count
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
       const { data } = await supabase
         .from('looks')
         .select('*, profile:profiles(username, avatar_url)')
         .gte('created_at', sevenDaysAgo.toISOString())
         .order('likes_count', { ascending: false })
         .limit(10);
-
-      if (data) {
-        setLooks(data as TopLook[]);
-      }
-    } catch (error) {
-      console.error('Error loading ranking:', error);
-    } finally {
-      setLoading(false);
-    }
+      if (data) setLooks(data as TopLook[]);
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="animate-spin text-[#FF3B5C] w-8 h-8" />
-      </div>
-    );
+    return <RankingSkeleton />;
   }
 
+  const podium = looks.slice(0, 3);
+  const rest = looks.slice(3);
+
+  // podium order: 2nd, 1st, 3rd
+  const podiumOrder = podium.length === 3 ? [podium[1], podium[0], podium[2]] : [];
+  const podiumMeta = [MEDAL[1], MEDAL[0], MEDAL[2]];
+  const podiumHeights = ['120px', '150px', '100px'];
+
   return (
-    <div className="min-h-screen bg-[#0a0a0a] pb-20">
+    <div style={{ minHeight: '100vh', background: '#050508', paddingBottom: '90px', fontFamily: "'Space Grotesk', system-ui, sans-serif" }}>
+
       {/* Header */}
-      <div className="px-4 pt-8 pb-6 text-center">
-        <div className="flex items-center justify-center gap-3 mb-2">
-          <Trophy className="text-[#FFC107]" size={32} />
-          <h1 className="text-3xl font-bold font-[family-name:var(--font-syne)] text-white">
-            Top 10
-          </h1>
-          <Trophy className="text-[#FFC107]" size={32} />
+      <div style={{ position: 'relative', padding: '40px 16px 24px', textAlign: 'center', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', top: '-30%', left: '50%', transform: 'translateX(-50%)', width: '400px', height: '300px', background: 'radial-gradient(circle, rgba(255,193,7,0.12) 0%, transparent 70%)', pointerEvents: 'none' }} />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginBottom: '8px' }}>
+          <div style={{ width: '40px', height: '40px', background: 'linear-gradient(135deg, #FFC107, #e6a800)', borderRadius: '11px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 20px rgba(255,193,7,0.5)' }}>
+            <Trophy size={20} color="white" fill="white" />
+          </div>
+          <h1 style={{ fontFamily: "'Syne', system-ui, sans-serif", fontSize: '28px', fontWeight: 800, color: 'white', margin: 0, letterSpacing: '-0.5px' }}>Top 10</h1>
         </div>
-        <p className="text-[#888] font-[family-name:var(--font-space-grotesk)]">
-          Les looks les plus likés de la semaine
-        </p>
+        <p style={{ color: '#666', fontSize: '14px', margin: 0 }}>Les looks les plus likés de la semaine</p>
       </div>
 
       {looks.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
-          <Trophy className="text-[#FFC107] w-16 h-16 mb-4 opacity-50" />
-          <p className="text-[#888]">Aucun look cette semaine</p>
-          <p className="text-[#555] text-sm mt-2">Reviens bientôt !</p>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '64px 24px', textAlign: 'center' }}>
+          <div style={{ width: '64px', height: '64px', background: 'rgba(255,193,7,0.1)', border: '1px solid rgba(255,193,7,0.2)', borderRadius: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
+            <Trophy size={28} color="#FFC107" />
+          </div>
+          <p style={{ color: '#666', fontSize: '15px', marginBottom: '6px' }}>Aucun look cette semaine</p>
+          <p style={{ color: '#444', fontSize: '13px', margin: 0 }}>Reviens bientôt !</p>
         </div>
       ) : (
-        <div className="space-y-4 px-4">
+        <>
           {/* Podium */}
-          {looks.slice(0, 3).length === 3 && (
-            <div className="flex items-end justify-center gap-3 py-6">
-              {/* 2nd Place */}
-              <div className="flex flex-col items-center">
-                <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#C0C0C0] to-[#888] p-0.5 mb-2">
-                  <UserAvatar
-                    src={looks[1].profile?.avatar_url}
-                    username={looks[1].profile?.username || 'user'}
-                    size="md"
-                    className="w-full h-full"
-                  />
-                </div>
-                <div className="w-20 h-28 bg-[#1a1a1a] rounded-lg overflow-hidden relative">
-                  <Image
-                    src={looks[1].image_url}
-                    alt="Look"
-                    fill
-                    className="object-cover"
-                  />
-                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2">
-                    <p className="text-xs text-white text-center">
-                      <Heart className="inline w-3 h-3 mr-1 fill-[#C0C0C0] text-[#C0C0C0]" />
-                      {looks[1].likes_count}
-                    </p>
-                  </div>
-                </div>
-                <p className="text-[#C0C0C0] text-sm font-bold mt-2">2nd</p>
-                <p className="text-white text-xs">@{looks[1].profile?.username}</p>
-              </div>
-
-              {/* 1st Place */}
-              <div className="flex flex-col items-center">
-                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#FFD700] to-[#B8860B] p-1 mb-2">
-                  <UserAvatar
-                    src={looks[0].profile?.avatar_url}
-                    username={looks[0].profile?.username || 'user'}
-                    size="lg"
-                    className="w-full h-full"
-                  />
-                </div>
-                <div className="w-28 h-36 bg-[#1a1a1a] rounded-lg overflow-hidden relative">
-                  <Image
-                    src={looks[0].image_url}
-                    alt="Look"
-                    fill
-                    className="object-cover"
-                  />
-                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-3">
-                    <p className="text-sm text-white text-center">
-                      <Heart className="inline w-4 h-4 mr-1 fill-[#FFD700] text-[#FFD700]" />
-                      {looks[0].likes_count}
-                    </p>
-                  </div>
-                </div>
-                <p className="text-[#FFD700] text-lg font-bold mt-2">1er</p>
-                <p className="text-white text-sm">@{looks[0].profile?.username}</p>
-              </div>
-
-              {/* 3rd Place */}
-              <div className="flex flex-col items-center">
-                <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#CD7F32] to-[#8B4513] p-0.5 mb-2">
-                  <UserAvatar
-                    src={looks[2].profile?.avatar_url}
-                    username={looks[2].profile?.username || 'user'}
-                    size="md"
-                    className="w-full h-full"
-                  />
-                </div>
-                <div className="w-20 h-24 bg-[#1a1a1a] rounded-lg overflow-hidden relative">
-                  <Image
-                    src={looks[2].image_url}
-                    alt="Look"
-                    fill
-                    className="object-cover"
-                  />
-                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2">
-                    <p className="text-xs text-white text-center">
-                      <Heart className="inline w-3 h-3 mr-1 fill-[#CD7F32] text-[#CD7F32]" />
-                      {looks[2].likes_count}
-                    </p>
-                  </div>
-                </div>
-                <p className="text-[#CD7F32] text-sm font-bold mt-2">3ème</p>
-                <p className="text-white text-xs">@{looks[2].profile?.username}</p>
-              </div>
+          {podiumOrder.length === 3 && (
+            <div style={{ padding: '0 16px 32px', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: '12px' }}>
+              {podiumOrder.map((look, i) => {
+                const meta = podiumMeta[i];
+                const isFirst = i === 1;
+                return (
+                  <Link key={look.id} href={`/look/${look.id}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', textDecoration: 'none', flex: isFirst ? '0 0 110px' : '0 0 88px' }}>
+                    {isFirst && <Crown size={20} color="#FFD700" style={{ filter: 'drop-shadow(0 0 6px rgba(255,215,0,0.6))' }} />}
+                    <div style={{ width: isFirst ? '52px' : '40px', height: isFirst ? '52px' : '40px', borderRadius: '50%', border: `2px solid ${meta.border}`, overflow: 'hidden', boxShadow: `0 0 14px ${meta.shadow}` }}>
+                      <UserAvatar src={look.profile?.avatar_url} username={look.profile?.username || 'user'} size={isFirst ? 'md' : 'sm'} />
+                    </div>
+                    <div style={{ width: '100%', height: podiumHeights[i], borderRadius: '12px', overflow: 'hidden', position: 'relative', border: `1px solid ${meta.border}40`, boxShadow: `0 0 20px ${meta.shadow}` }}>
+                      <Image src={look.image_url} alt="Look" fill style={{ objectFit: 'cover' }} />
+                      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 60%)' }} />
+                      <div style={{ position: 'absolute', bottom: '8px', left: 0, right: 0, textAlign: 'center' }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                          <Heart size={12} color={meta.color} fill={meta.color} />
+                          <span style={{ color: meta.color, fontSize: '12px', fontWeight: 700 }}>{look.likes_count}</span>
+                        </div>
+                      </div>
+                      <div style={{ position: 'absolute', top: '8px', left: 0, right: 0, textAlign: 'center' }}>
+                        <span style={{ background: meta.color, color: '#000', fontSize: '10px', fontWeight: 800, padding: '2px 8px', borderRadius: '8px' }}>{meta.label}</span>
+                      </div>
+                    </div>
+                    <p style={{ color: 'white', fontSize: '11px', fontWeight: 600, margin: 0, textAlign: 'center', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>@{look.profile?.username}</p>
+                  </Link>
+                );
+              })}
             </div>
           )}
 
           {/* Rest of ranking */}
-          <div className="space-y-3 mt-6">
-            <h2 className="text-lg font-bold text-white font-[family-name:var(--font-syne)]">
-              Classement complet
-            </h2>
-            {looks.map((look, index) => (
-              <Link
-                key={look.id}
-                href={`/profile/${look.profile?.username}`}
-                className="flex items-center gap-3 p-3 bg-[#141414] rounded-xl hover:bg-[#1a1a1a] transition-colors"
-              >
-                <span className="w-8 text-center font-bold text-[#888]">
-                  #{index + 1}
-                </span>
-                <div className="relative w-16 h-16 rounded-lg overflow-hidden flex-shrink-0">
-                  <Image
-                    src={look.image_url}
-                    alt="Look"
-                    fill
-                    className="object-cover"
-                  />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-white font-medium truncate">
-                    @{look.profile?.username}
-                  </p>
-                  {look.description && (
-                    <p className="text-[#888] text-sm truncate">
-                      {look.description.slice(0, 40)}...
-                    </p>
-                  )}
-                </div>
-                <div className="flex items-center gap-1 text-[#FF3B5C]">
-                  <Heart className="w-4 h-4 fill-current" />
-                  <span className="font-bold">{look.likes_count}</span>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
+          {rest.length > 0 && (
+            <div style={{ padding: '0 16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                <Zap size={15} color="#FF3B5C" />
+                <h2 style={{ fontFamily: "'Syne', system-ui, sans-serif", fontSize: '15px', fontWeight: 700, color: 'white', margin: 0 }}>Classement complet</h2>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {looks.map((look, index) => (
+                  <Link key={look.id} href={`/look/${look.id}`} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '14px', textDecoration: 'none', transition: 'background 0.2s' }}>
+                    <span style={{ width: '28px', textAlign: 'center', fontFamily: "'Syne', system-ui, sans-serif", fontWeight: 800, fontSize: '15px', color: index < 3 ? ['#FFD700','#C0C0C0','#CD7F32'][index] : '#444', flexShrink: 0 }}>#{index + 1}</span>
+                    <div style={{ width: '52px', height: '52px', borderRadius: '10px', overflow: 'hidden', position: 'relative', flexShrink: 0 }}>
+                      <Image src={look.image_url} alt="Look" fill style={{ objectFit: 'cover' }} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ color: 'white', fontWeight: 600, fontSize: '14px', margin: '0 0 3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>@{look.profile?.username}</p>
+                      {look.description && <p style={{ color: '#555', fontSize: '12px', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{look.description.slice(0, 40)}</p>}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                      <Heart size={14} color="#FF3B5C" fill="#FF3B5C" />
+                      <span style={{ color: '#FF3B5C', fontWeight: 700, fontSize: '14px' }}>{look.likes_count}</span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

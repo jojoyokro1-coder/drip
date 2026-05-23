@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
-import Script from "next/script";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { Toaster } from "@/components/ui/sonner";
 import GlobalClientEffects from "@/components/GlobalClientEffects";
 import { AuthProvider } from "@/hooks/useAuth";
 
 import "./globals.css";
+
+// No custom font variables; using default system fonts.
 
 export const metadata: Metadata = {
   title: "DRIP - Plateforme Mode Streetwear",
@@ -18,10 +19,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="fr" suppressHydrationWarning>
-      <head>
-        <Script src="https://cdn.tailwindcss.com" strategy="beforeInteractive" />
-      </head>
+    <html lang="fr" className="" suppressHydrationWarning>
+      <head />
       <body
         className="antialiased bg-[#0a0a0a] text-white"
       >

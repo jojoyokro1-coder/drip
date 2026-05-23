@@ -1,8 +1,15 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/integrations/supabase/server";
+import { createClient } from "@supabase/supabase-js";
+
+function getSupabaseAdmin() {
+  const url = process.env.DATABASE_URL || process.env.NEXT_PUBLIC_DATABASE_URL || "";
+  const key = process.env.DATABASE_SERVICE_ROLE_KEY || "";
+
+  return createClient(url, key);
+}
 
 function isConfigured() {
-  const url = process.env.DATABASE_URL || "";
+  const url = process.env.DATABASE_URL || process.env.NEXT_PUBLIC_DATABASE_URL || "";
   const key = process.env.DATABASE_SERVICE_ROLE_KEY || "";
   const invalidUrl = !url || url.includes("example.supabase.co");
   const invalidKey = !key || key.includes("demo-service-role-key");
@@ -13,7 +20,11 @@ export async function POST(request: Request) {
   try {
     if (!isConfigured()) {
       return NextResponse.json(
-        { error: "Configuration Supabase invalide. Mets tes vraies cles dans .env.local." },
+        {
+          error:
+            "Configuration Supabase serveur incomplete. Ajoute DATABASE_SERVICE_ROLE_KEY dans .env.local.",
+          code: "SERVER_SUPABASE_NOT_CONFIGURED",
+        },
         { status: 500 }
       );
     }
@@ -38,7 +49,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Le mot de passe doit contenir au moins 6 caracteres." }, { status: 400 });
     }
 
-    const { data: existingProfile } = await supabaseAdmin
+    const admin = getSupabaseAdmin();
+
+    const { data: existingProfile } = await admin
       .from("profiles")
       .select("id")
       .eq("username", username)
@@ -48,7 +61,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Ce pseudo est deja pris." }, { status: 409 });
     }
 
-    const { data: created, error: createError } = await supabaseAdmin.auth.admin.createUser({
+    const { data: created, error: createError } = await admin.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
@@ -59,13 +72,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: createError?.message || "Impossible de creer le compte." }, { status: 400 });
     }
 
-    const { error: profileError } = await supabaseAdmin.from("profiles").upsert({
+    const { error: profileError } = await admin.from("profiles").upsert({
       id: created.user.id,
       username,
+      bio: "",
+      avatar_url: null,
     });
 
     if (profileError) {
-      await supabaseAdmin.auth.admin.deleteUser(created.user.id);
+      await admin.auth.admin.deleteUser(created.user.id);
       return NextResponse.json({ error: "Compte cree mais profil invalide. Reessaie." }, { status: 500 });
     }
 

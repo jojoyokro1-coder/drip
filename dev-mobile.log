@@ -1,0 +1,31 @@
+
+> nextjs-template@0.1.0 dev
+> next dev --hostname 0.0.0.0 --port 3000
+
+▲ Next.js 16.2.6 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://0.0.0.0:3000
+- Environments: .env.local
+✓ Ready in 1241ms
+
+ GET /register 200 in 1651ms (next.js: 214ms, proxy.ts: 357ms, application-code: 1081ms)
+ POST /api/register 500 in 200ms (next.js: 170ms, application-code: 29ms)
+ GET /register 200 in 77ms (next.js: 6ms, proxy.ts: 7ms, application-code: 65ms)
+⚠ Blocked cross-origin request to Next.js dev resource /_next/webpack-hmr from "10.10.10.128".
+Cross-origin access to Next.js dev resources is blocked by default for safety.
+
+To allow this host in development, add it to "allowedDevOrigins" in next.config.js and restart the dev server:
+
+// next.config.js
+module.exports = {
+  allowedDevOrigins: ['10.10.10.128'],
+}
+
+Read more: https://nextjs.org/docs/app/api-reference/config/next-config-js/allowedDevOrigins
+ GET /register 200 in 363ms (next.js: 64ms, proxy.ts: 55ms, application-code: 245ms)
+ GET /login 200 in 331ms (next.js: 189ms, proxy.ts: 19ms, application-code: 122ms)
+ GET /login? 200 in 226ms (next.js: 20ms, proxy.ts: 22ms, application-code: 185ms)
+ GET /register 200 in 122ms (next.js: 11ms, proxy.ts: 12ms, application-code: 99ms)
+ GET /register? 200 in 148ms (next.js: 18ms, proxy.ts: 8ms, application-code: 122ms)
+ GET /login 200 in 107ms (next.js: 9ms, proxy.ts: 10ms, application-code: 88ms)
+ GET /login? 200 in 129ms (next.js: 10ms, proxy.ts: 13ms, application-code: 106ms)

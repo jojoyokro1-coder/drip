@@ -1,56 +1,110 @@
 'use client';
 
+import type { CSSProperties } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { Home, PlusCircle, Trophy, User } from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
+import { Home, PlusCircle, Trophy, TrendingUp, User } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
+const navLabelStyle: CSSProperties = {
+  fontSize: '11px',
+  fontWeight: 700,
+  lineHeight: 1,
+};
+
+function navItemStyle(active: boolean): CSSProperties {
+  return {
+    minHeight: '44px',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '5px',
+    padding: '5px 4px',
+    color: active ? '#FF3B5C' : 'rgba(255,255,255,0.55)',
+    textDecoration: 'none',
+    borderRadius: '14px',
+    WebkitTapHighlightColor: 'transparent',
+    transition: 'color 160ms ease, background 160ms ease',
+  };
+}
 
 export function BottomNav() {
   const pathname = usePathname();
+  const router = useRouter();
   const { user } = useAuth();
   const username = user?.user_metadata?.username as string | undefined;
   const profileHref = username ? `/profile/${username}` : '/profile/edit';
 
-  const navItems = [
-    { href: '/', icon: Home, label: 'Feed' },
-    { href: '/ranking', icon: Trophy, label: 'Top' },
-    { href: '/trends', icon: Home, label: 'Tendances' },
-    { href: user ? profileHref : '/login', icon: User, label: 'Profil' },
-  ];
-
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-[#0a0a0a] border-t border-[#2a2a2a] z-50 safe-area-pb">
-      <div className="flex items-center justify-around h-16 max-w-lg mx-auto">
-        {navItems.map((item) => {
-          const isActive = pathname === item.href || (item.label === 'Profil' && pathname.startsWith('/profile'));
-          const Icon = item.icon;
-          const isUpload = item.href === '/upload';
+    <nav
+      style={{
+        position: 'fixed',
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 50,
+        background: 'rgba(5,5,8,0.88)',
+        borderTop: '1px solid rgba(255,255,255,0.08)',
+        backdropFilter: 'blur(18px)',
+        WebkitBackdropFilter: 'blur(18px)',
+        padding: '10px 10px calc(env(safe-area-inset-bottom) + 10px)',
+        boxShadow: '0 -16px 40px rgba(0,0,0,0.45)',
+      }}
+    >
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr 58px 1fr 1fr',
+          alignItems: 'end',
+          gap: '4px',
+          maxWidth: '520px',
+          margin: '0 auto',
+        }}
+      >
+        <Link href="/" style={navItemStyle(pathname === '/')}>
+          <Home size={22} fill={pathname === '/' ? 'currentColor' : 'none'} />
+          <span style={navLabelStyle}>Feed</span>
+        </Link>
 
-          if (isUpload) {
-            return (
-              <Link
-                key={item.href}
-                href={user ? '/upload' : '/login'}
-                className="flex items-center justify-center w-12 h-12 rounded-full bg-[#FF3B5C] text-white hover:bg-[#e63552] transition-colors"
-              >
-                <PlusCircle size={28} />
-              </Link>
-            );
-          }
+        <Link href="/ranking" style={navItemStyle(pathname === '/ranking')}>
+          <Trophy size={22} fill={pathname === '/ranking' ? 'currentColor' : 'none'} />
+          <span style={navLabelStyle}>Top</span>
+        </Link>
 
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex flex-col items-center justify-center gap-1 px-4 py-2 transition-colors ${
-                isActive ? 'text-[#FF3B5C]' : 'text-[#888] hover:text-white'
-              }`}
-            >
-              <Icon size={24} className={isActive ? 'fill-current' : ''} />
-              <span className="text-xs font-medium">{item.label}</span>
-            </Link>
-          );
-        })}
+        <Link
+          href={user ? '/upload' : '/login'}
+          aria-label="Poster un look"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '54px',
+            height: '54px',
+            minHeight: '44px',
+            borderRadius: '999px',
+            color: '#fff',
+            background: 'linear-gradient(135deg, #FF3B5C, #c0135e)',
+            boxShadow: '0 0 28px rgba(255,59,92,0.46)',
+            textDecoration: 'none',
+            WebkitTapHighlightColor: 'transparent',
+            transform: 'translateY(-8px)',
+          }}
+        >
+          <PlusCircle size={26} />
+        </Link>
+
+        <Link href="/trends" style={navItemStyle(pathname.startsWith('/trends'))}>
+          <TrendingUp size={22} />
+          <span style={navLabelStyle}>Trends</span>
+        </Link>
+
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1px' }}>
+          <Link href={user ? profileHref : '/login'} style={navItemStyle(pathname.startsWith('/profile'))}>
+            <User size={22} fill={pathname.startsWith('/profile') ? 'currentColor' : 'none'} />
+            <span style={navLabelStyle}>Profil</span>
+          </Link>
+        </div>
       </div>
     </nav>
   );

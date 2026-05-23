@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import type { CSSProperties } from 'react';
 
 interface UserAvatarProps {
   src?: string | null;
@@ -9,25 +10,39 @@ interface UserAvatarProps {
   className?: string;
 }
 
+const sizeValues = {
+  sm: 32,
+  md: 48,
+  lg: 80,
+};
+
 export function UserAvatar({ src, username, size = 'md', className = '' }: UserAvatarProps) {
-  const sizeClasses = {
-    sm: 'w-8 h-8 text-xs',
-    md: 'w-12 h-12 text-sm',
-    lg: 'w-20 h-20 text-xl',
-  };
-
-  const sizeValues = {
-    sm: 32,
-    md: 48,
-    lg: 80,
-  };
-
+  const px = sizeValues[size];
   const initials = username.slice(0, 2).toUpperCase();
+
+  const shellStyle: CSSProperties = {
+    width: `${px}px`,
+    height: `${px}px`,
+    borderRadius: '999px',
+    overflow: 'hidden',
+    flexShrink: 0,
+  };
 
   if (!src) {
     return (
       <div
-        className={`${sizeClasses[size]} rounded-full bg-gradient-to-br from-[#FF3B5C] to-[#FFC107] flex items-center justify-center font-bold text-white ${className}`}
+        className={className}
+        style={{
+          ...shellStyle,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'linear-gradient(135deg, #FF3B5C, #FFC107)',
+          color: '#fff',
+          fontFamily: "'Syne', sans-serif",
+          fontSize: size === 'lg' ? '20px' : size === 'md' ? '14px' : '12px',
+          fontWeight: 800,
+        }}
       >
         {initials}
       </div>
@@ -35,16 +50,16 @@ export function UserAvatar({ src, username, size = 'md', className = '' }: UserA
   }
 
   return (
-    <div
-      className={`${sizeClasses[size]} rounded-full overflow-hidden flex-shrink-0 ${className}`}
-    >
+    <div className={className} style={shellStyle}>
       <Image
         src={src}
         alt={username}
-        width={sizeValues[size]}
-        height={sizeValues[size]}
-        className="w-full h-full object-cover"
+        width={px}
+        height={px}
+        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
       />
     </div>
   );
 }
+
+export default UserAvatar;

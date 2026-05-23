@@ -1,9 +1,21 @@
+@import "tailwindcss";
+
+@theme {
+  --font-syne: 'Syne', system-ui, sans-serif;
+  --font-space-grotesk: 'Space Grotesk', system-ui, sans-serif;
+  
+  --color-muted: #181820;
+  --color-muted-foreground: #66667f;
+  --color-accent: #FF3B5C;
+  --color-accent-foreground: #ffffff;
+  --color-border: #22222a;
+}
+
 * {
   box-sizing: border-box;
 }
 
-html,
-body {
+html, body {
   margin: 0;
   padding: 0;
 }
@@ -11,5 +23,13 @@ body {
 body {
   background: #0a0a0a;
   color: #ffffff;
-  font-family: Arial, sans-serif;
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
