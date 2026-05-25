@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { UserPlus, UserCheck, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import { isLocalFollowing, toggleLocalFollow } from "@/lib/local-follows";
 
 interface FollowButtonProps {
   targetUserId?: string;
@@ -14,24 +16,28 @@ interface FollowButtonProps {
   /** Variante compacte (icône seule) */
   compact?: boolean;
   /** Callback appelé après (un)follow */
-  onToggle?: (isFollowing: boolean) => void;
+  onToggle?: (isFollowing: boolean, count: number) => void;
 }
 
 export default function FollowButton({
   targetUserId,
   userId,
+  initialFollowing,
+  initialCount = 0,
   compact = false,
   onToggle,
 }: FollowButtonProps) {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const resolvedTargetUserId = targetUserId || userId || "";
-  const [following, setFollowing] = useState(false);
+  const [following, setFollowing] = useState(initialFollowing ?? false);
+  const [followerCount, setFollowerCount] = useState(initialCount);
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [hovered, setHovered] = useState(false);
 
   // On ne render pas le bouton si c'est le propre profil
   const isSelf = user?.id === resolvedTargetUserId;
+  const isLocal = !session;
 
   useEffect(() => {
     if (!user || isSelf || !resolvedTargetUserId) {
@@ -39,45 +45,87 @@ export default function FollowButton({
       return;
     }
 
+    if (initialFollowing !== undefined) {
+      setFollowing(initialFollowing);
+      setInitialLoading(false);
+      return;
+    }
+
+    const localFollowing = isLocalFollowing(user.id, resolvedTargetUserId);
+
     supabase
       .from("follows")
       .select("id")
       .eq("follower_id", user.id)
       .eq("following_id", resolvedTargetUserId)
-      .single()
-      .then(({ data }) => {
-        setFollowing(!!data);
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (error) {
+          // Fall back to localStorage if table doesn't exist or RLS blocks
+          if (localFollowing !== false) setFollowing(true);
+        } else {
+          setFollowing(!!data);
+        }
         setInitialLoading(false);
       });
-  }, [user, resolvedTargetUserId, isSelf]);
+  }, [user, resolvedTargetUserId, isSelf, initialFollowing]);
 
   const handleToggle = useCallback(async () => {
     if (!user || loading || isSelf || !resolvedTargetUserId) return;
+
     setLoading(true);
+    const previousFollowing = following;
+    const previousCount = followerCount;
+    setFollowing(!previousFollowing);
+
+    const tryLocal = () => {
+      const result = toggleLocalFollow(user.id, resolvedTargetUserId);
+      setFollowing(result.following);
+      setFollowerCount(result.count);
+      onToggle?.(result.following, result.count);
+    };
 
     try {
-      if (following) {
-        await supabase
+      // Try direct Supabase query first (same pattern as like button on detail page)
+      if (previousFollowing) {
+        const { error: delErr } = await supabase
           .from("follows")
           .delete()
           .eq("follower_id", user.id)
           .eq("following_id", resolvedTargetUserId);
-        setFollowing(false);
-        onToggle?.(false);
+        if (delErr) throw delErr;
       } else {
-        await supabase.from("follows").insert({
-          follower_id: user.id,
-          following_id: resolvedTargetUserId,
-        });
-        setFollowing(true);
-        onToggle?.(true);
+        const { error: insErr } = await supabase
+          .from("follows")
+          .insert({ follower_id: user.id, following_id: resolvedTargetUserId });
+        if (insErr) throw insErr;
       }
-    } catch (err) {
-      console.error("Follow error:", err);
+
+      const { count, error: countErr } = await supabase
+        .from("follows")
+        .select("*", { count: "exact", head: true })
+        .eq("following_id", resolvedTargetUserId);
+      const newCount = countErr ? followerCount : Math.max(0, count || 0);
+
+      setFollowing(!previousFollowing);
+      setFollowerCount(newCount);
+      onToggle?.(!previousFollowing, newCount);
+    } catch (err: unknown) {
+      // If Supabase table doesn't exist or RLS blocks, fall back to localStorage
+      const msg = err instanceof Error ? err.message : "";
+      if (msg.includes("does not exist") || msg.includes("permission denied") || msg.includes("policy")) {
+        console.warn("Follow via Supabase failed, falling back to localStorage:", msg);
+        tryLocal();
+      } else {
+        console.error("Follow error:", err);
+        setFollowing(previousFollowing);
+        setFollowerCount(previousCount);
+        toast.error("Erreur lors de l'abonnement");
+      }
     } finally {
       setLoading(false);
     }
-  }, [user, following, loading, resolvedTargetUserId, isSelf, onToggle]);
+  }, [user, following, followerCount, loading, resolvedTargetUserId, isSelf, onToggle]);
 
   if (!user || isSelf) return null;
   if (initialLoading) return (
@@ -135,7 +183,7 @@ export default function FollowButton({
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          gap: compact ? "0" : "7px",
+          gap: compact ? "0" : "6px",
           background: bg,
           border: `1px solid ${borderColor}`,
           borderRadius: "100px",
@@ -181,6 +229,18 @@ export default function FollowButton({
             <UserPlus size={16} style={{ flexShrink: 0 }} />
             {!compact && <span>{label}</span>}
           </>
+        )}
+        {/* Follower count */}
+        {!compact && followerCount > 0 && !loading && (
+          <span style={{
+            fontSize: "11px",
+            fontWeight: 600,
+            opacity: 0.5,
+            marginLeft: following ? "4px" : "0",
+            flexShrink: 0,
+          }}>
+            {followerCount}
+          </span>
         )}
       </button>
 

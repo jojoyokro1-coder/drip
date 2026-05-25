@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
 
+const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+};
+
 export async function POST(request: NextRequest) {
   try {
     const supabaseAdmin = getSupabaseAdmin();
@@ -27,18 +34,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Image required' }, { status: 400 });
     }
 
-    // Validate file type
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
-    if (!allowedTypes.includes(file.type)) {
+    const extension = ALLOWED_IMAGE_TYPES[file.type];
+    if (!extension) {
       return NextResponse.json({ error: 'Invalid file type' }, { status: 400 });
     }
 
-    // Read file
+    if (file.size > MAX_AVATAR_SIZE) {
+      return NextResponse.json({ error: 'Avatar trop lourd (max 5MB)' }, { status: 400 });
+    }
+
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    // Upload to Supabase Storage
-    const fileName = `avatars/${user.id}-${Date.now()}.${file.type.split('/')[1]}`;
+    const fileName = `avatars/${user.id}-${Date.now()}.${extension}`;
     const { error: uploadError } = await supabaseAdmin.storage
       .from('looks')
       .upload(fileName, buffer, {

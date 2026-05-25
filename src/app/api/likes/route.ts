@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
+import { createNotification } from '@/lib/server-notifications';
 
 export async function POST(request: NextRequest) {
   try {
@@ -26,6 +27,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'lookId required' }, { status: 400 });
     }
 
+    const { data: look } = await supabaseAdmin
+      .from('looks')
+      .select('user_id')
+      .eq('id', lookId)
+      .maybeSingle();
+
     // Check if already liked
     const { data: existingLike } = await supabaseAdmin
       .from('likes')
@@ -43,19 +50,30 @@ export async function POST(request: NextRequest) {
     } else {
       // Like
       await supabaseAdmin.from('likes').insert({ user_id: user.id, look_id: lookId });
+      await createNotification(supabaseAdmin, {
+        userId: look?.user_id,
+        actorId: user.id,
+        type: 'like',
+        lookId,
+      });
       liked = true;
     }
 
-    // Get updated count
-    const { data: look } = await supabaseAdmin
+    const { count } = await supabaseAdmin
+      .from('likes')
+      .select('*', { count: 'exact', head: true })
+      .eq('look_id', lookId);
+
+    const safeCount = Math.max(0, count || 0);
+
+    await supabaseAdmin
       .from('looks')
-      .select('likes_count')
-      .eq('id', lookId)
-      .maybeSingle();
+      .update({ likes_count: safeCount })
+      .eq('id', lookId);
 
     return NextResponse.json({
       liked,
-      count: look?.likes_count || 0,
+      count: safeCount,
     });
   } catch (error) {
     console.error('Like error:', error);

@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { MessageCircle, X } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { MessageCircle, Send, X } from 'lucide-react';
 import { UserAvatar } from '@/components/user-avatar';
+import { useAuth } from '@/hooks/useAuth';
 
 interface Comment {
   id: string;
@@ -15,51 +15,130 @@ interface Comment {
 }
 
 export function CommentsDrawer({ lookId, open, onClose }: { lookId: string; open: boolean; onClose: () => void }) {
+  const { user, session } = useAuth();
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  const useSupabase = !!process.env.NEXT_PUBLIC_DATABASE_URL && !process.env.NEXT_PUBLIC_DATABASE_URL.includes('example.supabase.co');
+  useEffect(() => {
+    if (open) {
+      setTimeout(() => inputRef.current?.focus(), 200);
+    }
+  }, [open]);
 
-  const loadComments = async () => {
-    if (useSupabase) {
-      const { data } = await supabase.from('comments').select('*, profiles(username, avatar_url)').eq('look_id', lookId).order('created_at', { ascending: true });
-      if (data) setComments(data as Comment[]);
-    } else {
+  const loadComments = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/comments?lookId=${encodeURIComponent(lookId)}`, { cache: 'no-store' });
+      if (!response.ok) throw new Error('API comments unavailable');
+      const data = await response.json();
+      setComments(data.comments || []);
+    } catch {
       const stored = localStorage.getItem(`drip_comments_${lookId}`);
       setComments(stored ? JSON.parse(stored) : []);
     }
-  };
+  }, [lookId]);
 
   useEffect(() => {
     if (open) loadComments();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, lookId]);
+  }, [loadComments, open]);
 
   const addComment = async () => {
     if (!newComment.trim()) return;
+    setError(null);
     setLoading(true);
-    const comment: Comment = {
-      id: Date.now().toString(),
-      user_id: 'local',
-      look_id: lookId,
-      content: newComment.trim(),
-      created_at: new Date().toISOString(),
-    };
-    if (useSupabase) {
-      await supabase.from('comments').insert({ look_id: lookId, content: newComment.trim() });
-      await loadComments();
-    } else {
+
+    const commentText = newComment.trim();
+
+    const token = session?.access_token;
+
+    // Local mode or no session: save directly to localStorage
+    if (!token || !user) {
+      const comment: Comment = {
+        id: Date.now().toString(),
+        user_id: user?.id || 'local',
+        look_id: lookId,
+        content: commentText,
+        created_at: new Date().toISOString(),
+        profile: user?.user_metadata?.username
+          ? {
+              username: String(user.user_metadata.username),
+              avatar_url: String(user.user_metadata.avatar_url || ''),
+            }
+          : undefined,
+      };
       const updated = [...comments, comment];
       localStorage.setItem(`drip_comments_${lookId}`, JSON.stringify(updated));
       setComments(updated);
+      setNewComment('');
+      setLoading(false);
+      return;
     }
-    setNewComment('');
-    setLoading(false);
+
+    try {
+      const response = await fetch('/api/comments', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ lookId, content: commentText }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        if (data?.localFallback) {
+          // Table doesn't exist — save locally without showing error
+          const comment: Comment = {
+            id: Date.now().toString(),
+            user_id: user?.id || 'local',
+            look_id: lookId,
+            content: commentText,
+            created_at: new Date().toISOString(),
+            profile: user?.user_metadata?.username
+              ? { username: String(user.user_metadata.username), avatar_url: String(user.user_metadata.avatar_url || '') }
+              : undefined,
+          };
+          const updated = [...comments, comment];
+          localStorage.setItem(`drip_comments_${lookId}`, JSON.stringify(updated));
+          setComments(updated);
+          setNewComment('');
+          setLoading(false);
+          return;
+        }
+        throw new Error(data?.error || "Impossible d'envoyer le commentaire.");
+      }
+
+      setComments((current) => [...current, data.comment]);
+      setNewComment('');
+    } catch (err) {
+      const comment: Comment = {
+        id: Date.now().toString(),
+        user_id: user?.id || 'local',
+        look_id: lookId,
+        content: commentText,
+        created_at: new Date().toISOString(),
+        profile: user?.user_metadata?.username
+          ? {
+              username: String(user.user_metadata.username),
+              avatar_url: String(user.user_metadata.avatar_url || ''),
+            }
+          : undefined,
+      };
+      const updated = [...comments, comment];
+      localStorage.setItem(`drip_comments_${lookId}`, JSON.stringify(updated));
+      setComments(updated);
+      setNewComment('');
+      setError("Commentaire sauvegardé localement.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div
+      onClick={onClose}
       style={{
         position: 'fixed',
         inset: 0,
@@ -70,50 +149,80 @@ export function CommentsDrawer({ lookId, open, onClose }: { lookId: string; open
       }}
     >
       <div
+        onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%',
           maxHeight: '80vh',
           background: '#050508',
-          borderTopLeftRadius: '20px',
-          borderTopRightRadius: '20px',
+          borderTopLeftRadius: '24px',
+          borderTopRightRadius: '24px',
           overflow: 'hidden',
+          boxShadow: '0 -8px 40px rgba(0,0,0,0.6)',
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-          <span style={{ color: 'white', fontWeight: 600 }}>Commentaires</span>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'white' }}>
-            <X size={20} />
+        <div style={{ position: 'relative', padding: '12px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: '36px', height: '4px', borderRadius: '2px', background: 'rgba(255,255,255,0.15)', position: 'absolute', top: '8px' }} />
+          <span style={{ color: 'white', fontSize: '15px', fontWeight: 600, fontFamily: "'Syne', sans-serif" }}>Commentaires</span>
+          <button onClick={onClose} style={{ position: 'absolute', right: '16px', width: '32px', height: '32px', borderRadius: '50%', background: 'rgba(255,255,255,0.06)', border: 'none', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.2s' }}>
+            <X size={18} />
           </button>
         </div>
-        <div style={{ padding: '0 16px', overflowY: 'auto', maxHeight: 'calc(80vh - 120px)' }}>
-          {comments.map((c) => (
-            <div key={c.id} style={{ display: 'flex', alignItems: 'flex-start', marginBottom: '12px' }}>
-              {c.profile ? (
-                <UserAvatar src={c.profile.avatar_url} username={c.profile.username} size="sm" />
-              ) : (
-                <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'rgba(255,255,255,0.2)', marginRight: '8px' }} />
-              )}
-              <div style={{ color: 'white' }}>
-                <span style={{ fontWeight: 600, marginRight: '6px' }}>{c.profile?.username || 'Anonyme'}</span>
-                <span style={{ fontSize: '13px', color: '#aaa' }}>{new Date(c.created_at).toLocaleString()}</span>
-                <p style={{ margin: '4px 0' }}>{c.content}</p>
-              </div>
+        <div style={{ padding: '8px 20px', overflowY: 'auto', maxHeight: 'calc(80vh - 140px)' }}>
+          {comments.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px 0', color: '#666' }}>
+              <MessageCircle size={36} style={{ opacity: 0.3, marginBottom: '12px' }} />
+              <p style={{ fontSize: '14px', fontFamily: "'Space Grotesk', sans-serif" }}>Aucun commentaire pour le moment.</p>
+              <p style={{ fontSize: '12px', color: '#555', marginTop: '4px' }}>Soyez le premier à réagir.</p>
             </div>
-          ))}
+          ) : (
+            comments.map((c, i) => (
+              <div key={c.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '10px 0', borderBottom: i < comments.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>
+                {c.profile ? (
+                  <UserAvatar src={c.profile.avatar_url} username={c.profile.username} size="sm" />
+                ) : (
+                  <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'rgba(255,255,255,0.1)', flexShrink: 0 }} />
+                )}
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                    <span style={{ fontWeight: 600, color: 'white', fontSize: '13px', fontFamily: "'Syne', sans-serif" }}>{c.profile?.username || 'Anonyme'}</span>
+                    <span style={{ fontSize: '11px', color: '#555' }}>{new Date(c.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}</span>
+                  </div>
+                  <p style={{ margin: '4px 0 0', color: 'rgba(255,255,255,0.85)', fontSize: '14px', lineHeight: 1.4 }}>{c.content}</p>
+                </div>
+              </div>
+            ))
+          )}
         </div>
-        <div style={{ padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.1)', display: 'flex', gap: '8px' }}>
+        <div style={{ padding: '12px 16px', paddingBottom: 'calc(12px + env(safe-area-inset-bottom, 0px))', borderTop: '1px solid rgba(255,255,255,0.1)', display: 'flex', gap: '10px', alignItems: 'center', background: '#0a0a10' }}>
           <input
+            ref={inputRef}
             type="text"
             placeholder="Écrire un commentaire..."
             value={newComment}
             onChange={(e) => setNewComment(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addComment(); } }}
             disabled={loading}
-            style={{ flex: 1, background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '8px', padding: '8px', color: 'white' }}
+            style={{
+              flex: 1, minHeight: '44px', padding: '10px 14px',
+              background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: '12px', color: 'white', fontSize: '15px', outline: 'none',
+              fontFamily: "'Space Grotesk', sans-serif",
+              transition: 'border-color 0.2s',
+            }}
+            onFocus={(e) => e.currentTarget.style.borderColor = 'rgba(255,59,92,0.5)'}
+            onBlur={(e) => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'}
           />
-          <button onClick={addComment} disabled={loading} style={{ background: '#FF3B5C', border: 'none', borderRadius: '8px', padding: '8px 12px', color: 'white' }}>
-            Envoyer
+          <button onClick={addComment} disabled={loading || !newComment.trim()}
+            style={{
+              width: '44px', height: '44px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: newComment.trim() ? 'linear-gradient(135deg, #FF3B5C, #c0135e)' : 'rgba(255,255,255,0.08)',
+              border: 'none', cursor: newComment.trim() ? 'pointer' : 'default', transition: 'all 0.2s',
+              boxShadow: newComment.trim() ? '0 0 16px rgba(255,59,92,0.3)' : 'none',
+            }}>
+            <Send size={18} color={newComment.trim() ? 'white' : 'rgba(255,255,255,0.3)'} />
           </button>
         </div>
+        {error && <p style={{ color: '#FF3B5C', fontSize: '12px', margin: '0 16px 12px' }}>{error}</p>}
       </div>
     </div>
   );

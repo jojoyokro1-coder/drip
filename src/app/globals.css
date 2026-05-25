@@ -1,9 +1,9 @@
 @import "tailwindcss";
 
 @theme {
-  --font-syne: 'Syne', system-ui, sans-serif;
-  --font-space-grotesk: 'Space Grotesk', system-ui, sans-serif;
-  
+  --font-syne: var(--font-syne), 'Syne', system-ui, sans-serif;
+  --font-space-grotesk: var(--font-space-grotesk), 'Space Grotesk', system-ui, sans-serif;
+
   --color-muted: #181820;
   --color-muted-foreground: #66667f;
   --color-accent: #FF3B5C;
@@ -13,17 +13,29 @@
 
 * {
   box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
 }
 
-html, body {
+html,
+body {
   margin: 0;
   padding: 0;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  touch-action: manipulation;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: none;
 }
 
 body {
   background: #0a0a0a;
   color: #ffffff;
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--font-space-grotesk), 'Space Grotesk', sans-serif;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none;
 }
 
 .hide-scrollbar::-webkit-scrollbar {
@@ -32,4 +44,27 @@ body {
 .hide-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+input,
+textarea,
+button,
+select,
+a {
+  font-family: inherit;
+}
+
+/* Améliore le confort de lecture sur mobile */
+@media (hover: none) and (pointer: coarse) {
+  html,
+  body {
+    -webkit-text-size-adjust: 100%;
+  }
+  button,
+  a,
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
 }

@@ -2,12 +2,15 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Image from "next/image";
 import Link from "next/link";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { isLocalSaved, toggleLocalSave } from "@/lib/local-saves";
 import LikeButton from "@/components/like-button";
 import FollowButton from "@/components/follow-button";
 import UserAvatar from "@/components/user-avatar";
+import { CommentsDrawer } from "@/components/comments-drawer";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronLeft, Share2, Bookmark, MoreHorizontal,
@@ -50,11 +53,18 @@ export default function LookDetailPage() {
   const [likesCount, setLikesCount] = useState(0);
   const [likeLoading, setLikeLoading] = useState(false);
   const [hearts, setHearts] = useState<HeartAnimation[]>([]);
+  const [commentOpen, setCommentOpen] = useState(false);
+  const [commentCount, setCommentCount] = useState(0);
+  const [saved, setSaved] = useState(false);
   const lastTap = useRef<number>(0);
 
   useEffect(() => {
+    if (look) setSaved(isLocalSaved(look.id));
+  }, [look]);
+
+  useEffect(() => {
     if (look) {
-      setLikesCount(look.likes_count);
+      setLikesCount(Math.max(0, look.likes_count || 0));
     }
   }, [look]);
 
@@ -65,7 +75,7 @@ export default function LookDetailPage() {
       .select("id")
       .eq("look_id", look.id)
       .eq("user_id", user.id)
-      .single()
+      .maybeSingle()
       .then(({ data }) => setLiked(!!data));
   }, [look, user]);
 
@@ -74,21 +84,22 @@ export default function LookDetailPage() {
     setLikeLoading(true);
 
     const isLiking = !liked;
+    const previousCount = Math.max(0, likesCount);
+    const nextCount = isLiking ? previousCount + 1 : Math.max(0, previousCount - 1);
     setLiked(isLiking);
-    setLikesCount((c) => (isLiking ? c + 1 : c - 1));
+    setLikesCount(nextCount);
 
     try {
       if (isLiking) {
         await supabase.from("likes").insert({ look_id: look.id, user_id: user.id });
-        await supabase.from("looks").update({ likes_count: likesCount + 1 }).eq("id", look.id);
       } else {
         await supabase.from("likes").delete().eq("look_id", look.id).eq("user_id", user.id);
-        await supabase.from("looks").update({ likes_count: likesCount - 1 }).eq("id", look.id);
       }
+      await supabase.from("looks").update({ likes_count: nextCount }).eq("id", look.id);
     } catch (err) {
       console.error("Error toggling like:", err);
       setLiked(!isLiking);
-      setLikesCount((c) => (isLiking ? c - 1 : c + 1));
+      setLikesCount(previousCount);
     } finally {
       setLikeLoading(false);
     }
@@ -127,16 +138,16 @@ export default function LookDetailPage() {
     }
 
     if (!liked) {
-      setLikeLoading(true);
-      setLiked(true);
-      setLikesCount((c) => c + 1);
+        setLikeLoading(true);
+        setLiked(true);
+        setLikesCount((c) => c + 1);
       try {
         await supabase.from("likes").insert({ look_id: look.id, user_id: user.id });
-        await supabase.from("looks").update({ likes_count: likesCount + 1 }).eq("id", look.id);
+        await supabase.from("looks").update({ likes_count: Math.max(0, likesCount) + 1 }).eq("id", look.id);
       } catch (err) {
         console.error("Error liking via double tap:", err);
         setLiked(false);
-        setLikesCount((c) => c - 1);
+        setLikesCount((c) => Math.max(0, c - 1));
       } finally {
         setLikeLoading(false);
       }
@@ -149,7 +160,7 @@ export default function LookDetailPage() {
         .from("looks")
         .select(`*, profiles(username, avatar_url, bio)`)
         .eq("id", id)
-        .single();
+        .maybeSingle();
 
       if (error || !data) {
         setNotFound(true);
@@ -160,6 +171,18 @@ export default function LookDetailPage() {
     };
     fetchLook();
   }, [id]);
+
+  useEffect(() => {
+    if (!look) return;
+    const stored = localStorage.getItem(`drip_comments_${look.id}`);
+    if (stored) {
+      try { setCommentCount(JSON.parse(stored).length); } catch { setCommentCount(0); }
+    } else {
+      fetch(`/api/comments?lookId=${encodeURIComponent(look.id)}`, { cache: 'no-store' })
+        .then(r => r.json().then(d => setCommentCount(d.comments?.length || 0)).catch(() => {}))
+        .catch(() => {});
+    }
+  }, [look]);
 
   const handleDelete = async () => {
     if (!look || !user || user.id !== look.user_id) return;
@@ -172,13 +195,20 @@ export default function LookDetailPage() {
 
   const handleShare = async () => {
     try {
+      const base = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
       await navigator.share({
         title: `Look de @${look?.profiles.username} sur DRIP`,
-        url: window.location.href,
+        url: `${base}/look/${look?.id}`,
       });
     } catch {
       navigator.clipboard.writeText(window.location.href);
     }
+  };
+
+  const handleSave = () => {
+    if (!look) return;
+    const now = toggleLocalSave(look.id, { image_url: look.image_url });
+    setSaved(now);
   };
 
   const formatDate = (dateStr: string) => {
@@ -199,7 +229,7 @@ export default function LookDetailPage() {
   if (loading) {
     return (
       <div style={{
-        minHeight: "100vh", background: "#050508",
+        minHeight: "100dvh", background: "#050508",
         display: "flex", alignItems: "center", justifyContent: "center",
         flexDirection: "column", gap: "16px",
       }}>
@@ -218,7 +248,7 @@ export default function LookDetailPage() {
   if (notFound || !look) {
     return (
       <div style={{
-        minHeight: "100vh", background: "#050508", color: "#fff",
+        minHeight: "100dvh", background: "#050508", color: "#fff",
         display: "flex", flexDirection: "column", alignItems: "center",
         justifyContent: "center", gap: "16px", padding: "24px",
         fontFamily: "'Space Grotesk', sans-serif",
@@ -249,7 +279,7 @@ export default function LookDetailPage() {
 
   return (
     <div style={{
-      minHeight: "100vh",
+      minHeight: "100dvh",
       background: "#050508",
       color: "#fff",
       fontFamily: "'Space Grotesk', sans-serif",
@@ -341,11 +371,14 @@ export default function LookDetailPage() {
       </div>
 
       {/* Image principale */}
-      <div style={{ position: "relative" }}>
-        <img
+      <div style={{ position: "relative", minHeight: "60vh" }}>
+        <Image
           src={look.image_url}
           alt="Look"
-          style={{ width: "100%", minHeight: "60vh", objectFit: "cover", display: "block" }}
+          fill
+          sizes="100vw"
+          priority
+          style={{ objectFit: "cover" }}
         />
 
         {/* Gradient overlay bas */}
@@ -376,7 +409,7 @@ export default function LookDetailPage() {
               <UserAvatar
                 src={look.profiles.avatar_url}
                 username={look.profiles.username}
-                size={48}
+                size="md"
               />
             </div>
             <div>
@@ -421,9 +454,10 @@ export default function LookDetailPage() {
           display: "flex", alignItems: "center",
           gap: "12px", marginBottom: "24px",
         }}>
-          <LikeButton lookId={look.id} initialCount={look.likes_count} />
+          <LikeButton lookId={look.id} initialCount={Math.max(0, look.likes_count || 0)} />
 
           <button
+            onClick={() => setCommentOpen(true)}
             style={{
               display: "flex", alignItems: "center", gap: "8px",
               background: "rgba(255,255,255,0.05)",
@@ -436,22 +470,23 @@ export default function LookDetailPage() {
             }}
           >
             <MessageCircle size={16} />
-            Commenter
+            {commentCount > 0 ? `${commentCount}` : 'Commenter'}
           </button>
 
           <button
+            onClick={handleSave}
             style={{
               marginLeft: "auto",
               display: "flex", alignItems: "center",
-              background: "rgba(255,255,255,0.05)",
-              border: "1px solid rgba(255,255,255,0.08)",
+              background: saved ? "rgba(255,59,92,0.15)" : "rgba(255,255,255,0.05)",
+              border: saved ? "1px solid rgba(255,59,92,0.3)" : "1px solid rgba(255,255,255,0.08)",
               borderRadius: "100px",
               padding: "10px 14px",
-              color: "rgba(255,255,255,0.6)",
-              cursor: "pointer",
+              color: saved ? "#FF3B5C" : "rgba(255,255,255,0.6)",
+              cursor: "pointer", transition: "all 0.2s",
             }}
           >
-            <Bookmark size={16} />
+            <Bookmark size={16} fill={saved ? "#FF3B5C" : "none"} />
           </button>
         </div>
 
@@ -467,6 +502,8 @@ export default function LookDetailPage() {
         {/* Autres looks de l'utilisateur */}
         <OtherLooks userId={look.user_id} currentLookId={look.id} username={look.profiles.username} />
       </div>
+
+      <CommentsDrawer lookId={look.id} open={commentOpen} onClose={() => setCommentOpen(false)} />
     </div>
   );
 }
@@ -525,12 +562,14 @@ function OtherLooks({
         overflow: "hidden",
       }}>
         {looks.map((l) => (
-          <Link key={l.id} href={`/look/${l.id}`} style={{ aspectRatio: "1", display: "block", overflow: "hidden" }}>
-            <img
+          <Link key={l.id} href={`/look/${l.id}`} style={{ aspectRatio: "1", display: "block", overflow: "hidden", position: "relative" }}>
+            <Image
               src={l.image_url}
               alt="Look"
+              fill
+              sizes="(max-width: 768px) 33vw, 180px"
               style={{
-                width: "100%", height: "100%", objectFit: "cover",
+                objectFit: "cover",
                 transition: "transform 0.3s",
               }}
               onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.05)")}

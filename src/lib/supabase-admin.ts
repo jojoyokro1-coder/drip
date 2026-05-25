@@ -13,3 +13,16 @@ export function getSupabaseAdmin() {
   return createClient(url, key);
 }
 
+export function getSupabaseClient() {
+  const url = process.env.DATABASE_URL || process.env.NEXT_PUBLIC_DATABASE_URL || "";
+  const key = process.env.NEXT_PUBLIC_DATABASE_PUBLISHABLE_KEY || "";
+  const invalidUrl = !url || url.includes("example.supabase.co");
+  const invalidKey = !key || key.includes("demo-anon-key");
+
+  if (invalidUrl || invalidKey) {
+    return null;
+  }
+
+  return createClient(url, key);
+}
+

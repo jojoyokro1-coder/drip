@@ -1,15 +1,26 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { Upload, X, Hash, ImagePlus, Loader2, ChevronLeft, Sparkles } from "lucide-react";
+import { compressImageFile } from "@/lib/image-compression";
+import { Upload, X, Hash, ImagePlus, Loader2, ChevronLeft, PlusCircle, Sparkles, Camera, Images } from "lucide-react";
+
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
 
 export default function UploadPage() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, session, loading: authLoading } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    setIsMobile(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent));
+  }, []);
 
   const [image, setImage] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -20,22 +31,61 @@ export default function UploadPage() {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleFile = (file: File) => {
+  useEffect(() => {
+    if (!authLoading && !user) {
+      try { sessionStorage.setItem('drip_login_redirect', '/upload'); } catch { /* ignore */ }
+      router.replace("/login");
+    }
+  }, [authLoading, user, router]);
+
+  useEffect(() => {
+    const pending = sessionStorage.getItem('drip_pending_upload');
+    if (pending) {
+      sessionStorage.removeItem('drip_pending_upload');
+      sessionStorage.removeItem('drip_pending_upload_type');
+      setPreview(pending);
+      fetch(pending).then(r => r.blob()).then(blob => {
+        const file = new File([blob], 'pending_upload', { type: blob.type });
+        setImage(file);
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (preview) URL.revokeObjectURL(preview);
+    };
+  }, [preview]);
+
+  const handleFile = useCallback(async (file: File) => {
     if (!file.type.startsWith("image/")) {
       setError("Fichier invalide. Seulement les images sont acceptées.");
       return;
     }
-    setImage(file);
-    setPreview(URL.createObjectURL(file));
-    setError(null);
-  };
+
+    if (file.size > MAX_IMAGE_SIZE) {
+      setError("Image trop lourde. La taille maximum est de 10MB.");
+      return;
+    }
+
+    try {
+      const optimizedFile = await compressImageFile(file);
+      setImage(optimizedFile);
+      setPreview(URL.createObjectURL(optimizedFile));
+      setError(null);
+    } catch {
+      setImage(file);
+      setPreview(URL.createObjectURL(file));
+      setError(null);
+    }
+  }, []);
 
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
     const file = e.dataTransfer.files[0];
     if (file) handleFile(file);
-  }, []);
+  }, [handleFile]);
 
   const addHashtag = () => {
     const tag = hashtagInput.trim().replace(/^#/, "").toLowerCase();
@@ -57,34 +107,52 @@ export default function UploadPage() {
   };
 
   const handleSubmit = async () => {
-    if (!image || !user) return;
+    if (authLoading || uploading) return;
+
+    if (!user) {
+      setError("Connecte-toi pour poster un look.");
+      try { sessionStorage.setItem('drip_login_redirect', '/upload'); } catch { /* ignore */ }
+      router.push("/login");
+      return;
+    }
+
+    if (!image) {
+      setError("Ajoute une image avant de publier.");
+      return;
+    }
+
     setUploading(true);
     setError(null);
 
     try {
-      const ext = image.name.split(".").pop();
-      const fileName = `${user.id}/${Date.now()}.${ext}`;
+      const activeSession =
+        session ??
+        (await supabase.auth.getSession().then(({ data }) => data.session).catch(() => null));
 
-      const { error: storageError } = await supabase.storage
-        .from("looks")
-        .upload(fileName, image, { cacheControl: "3600", upsert: false });
-
-      if (storageError) throw storageError;
-
-      const { data: urlData } = supabase.storage.from("looks").getPublicUrl(fileName);
+      if (!activeSession?.access_token) {
+        throw new Error("Session invalide. Reconnecte-toi pour publier.");
+      }
 
       const fullDescription =
         description +
         (hashtags.length > 0 ? " " + hashtags.map((h) => `#${h}`).join(" ") : "");
 
-      const { error: insertError } = await supabase.from("looks").insert({
-        user_id: user.id,
-        image_url: urlData.publicUrl,
-        description: fullDescription,
-        likes_count: 0,
+      const formData = new FormData();
+      formData.append("image", image);
+      formData.append("description", fullDescription);
+
+      const response = await fetch("/api/upload", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${activeSession.access_token}`,
+        },
+        body: formData,
       });
 
-      if (insertError) throw insertError;
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data?.error || "Erreur lors de l'upload.");
+      }
 
       router.push("/");
     } catch (err: unknown) {
@@ -97,7 +165,7 @@ export default function UploadPage() {
   return (
     <div
       style={{
-        minHeight: "100vh",
+        minHeight: "100dvh",
         background: "#050508",
         color: "#fff",
         fontFamily: "'Space Grotesk', sans-serif",
@@ -151,33 +219,37 @@ export default function UploadPage() {
 
         <button
           onClick={handleSubmit}
-          disabled={!image || uploading}
+          disabled={!image || uploading || authLoading || !user}
           style={{
-            background: image && !uploading
-              ? "linear-gradient(135deg, #FF3B5C, #ff6b84)"
+            background: image && !uploading && !authLoading && user
+              ? "linear-gradient(135deg, #FF3B5C, #c0135e)"
               : "rgba(255,255,255,0.08)",
             border: "none",
-            borderRadius: "12px",
-            padding: "8px 18px",
-            color: image && !uploading ? "#fff" : "rgba(255,255,255,0.3)",
-            cursor: image && !uploading ? "pointer" : "not-allowed",
+            borderRadius: "14px",
+            padding: "10px 20px",
+            minHeight: "44px",
+            color: image && !uploading && !authLoading && user ? "#fff" : "rgba(255,255,255,0.3)",
+            cursor: image && !uploading && !authLoading && user ? "pointer" : "not-allowed",
+            fontFamily: "'Syne', sans-serif",
             fontWeight: 700,
             fontSize: "14px",
+            letterSpacing: "0.02em",
             display: "flex",
             alignItems: "center",
-            gap: "6px",
+            gap: "8px",
             transition: "all 0.2s",
-            boxShadow: image && !uploading ? "0 4px 20px rgba(255,59,92,0.4)" : "none",
+            boxShadow: image && !uploading && !authLoading && user ? "0 0 28px rgba(255,59,92,0.46)" : "none",
+            WebkitTapHighlightColor: "transparent",
           }}
         >
           {uploading ? (
             <>
-              <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />
-              Upload…
+              <Loader2 size={16} style={{ animation: "spin 1s linear infinite" }} />
+              Publication…
             </>
           ) : (
             <>
-              <Sparkles size={14} />
+              <PlusCircle size={16} />
               Publier
             </>
           )}
@@ -185,78 +257,170 @@ export default function UploadPage() {
       </div>
 
       <div style={{ padding: "24px 20px", maxWidth: "500px", margin: "0 auto" }}>
-        {/* Zone de drop image */}
+        {/* Zone upload */}
         {!preview ? (
-          <div
-            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-            onDragLeave={() => setIsDragging(false)}
-            onDrop={onDrop}
-            onClick={() => fileInputRef.current?.click()}
-            style={{
-              border: `2px dashed ${isDragging ? "#FF3B5C" : "rgba(255,255,255,0.15)"}`,
+          isMobile ? (
+            /* ── Mobile : deux boutons natifs ── */
+            <div style={{
+              border: "2px dashed rgba(255,255,255,0.15)",
               borderRadius: "24px",
-              padding: "60px 24px",
+              padding: "48px 24px",
               textAlign: "center",
-              cursor: "pointer",
-              background: isDragging
-                ? "rgba(255,59,92,0.05)"
-                : "rgba(255,255,255,0.02)",
-              transition: "all 0.3s",
-              position: "relative",
-              overflow: "hidden",
-            }}
-          >
-            {/* Grille décorative */}
-            <div style={{
-              position: "absolute", inset: 0, opacity: 0.03,
-              backgroundImage: "linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)",
-              backgroundSize: "32px 32px",
-            }} />
-
-            <div style={{
-              width: "72px", height: "72px",
-              background: "linear-gradient(135deg, rgba(255,59,92,0.2), rgba(255,59,92,0.05))",
-              borderRadius: "20px",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              margin: "0 auto 20px",
-              border: "1px solid rgba(255,59,92,0.3)",
+              background: "rgba(255,255,255,0.02)",
+              position: "relative", overflow: "hidden",
             }}>
-              <ImagePlus size={32} color="#FF3B5C" />
+              {/* Grille décorative */}
+              <div style={{
+                position: "absolute", inset: 0, opacity: 0.03,
+                backgroundImage: "linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)",
+                backgroundSize: "32px 32px",
+              }} />
+
+              <div style={{
+                width: "72px", height: "72px",
+                background: "linear-gradient(135deg, rgba(255,59,92,0.2), rgba(255,59,92,0.05))",
+                borderRadius: "20px",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                margin: "0 auto 20px",
+                border: "1px solid rgba(255,59,92,0.3)",
+              }}>
+                <ImagePlus size={32} color="#FF3B5C" />
+              </div>
+
+              <p style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: "18px", marginBottom: "8px" }}>
+                Ajoute ton look
+              </p>
+              <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "14px", marginBottom: "28px" }}>
+                Prends une photo ou choisis depuis ta galerie
+              </p>
+
+              {/* Boutons mobile */}
+              <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
+                <button
+                  onClick={() => cameraInputRef.current?.click()}
+                  style={{
+                    display: "flex", alignItems: "center", gap: "8px",
+                    background: "linear-gradient(135deg, #FF3B5C, #c0135e)",
+                    border: "none", borderRadius: "14px",
+                    padding: "12px 20px",
+                    color: "#fff", fontWeight: 700, fontSize: "14px",
+                    fontFamily: "'Space Grotesk', sans-serif",
+                    cursor: "pointer",
+                    boxShadow: "0 4px 20px rgba(255,59,92,0.4)",
+                  }}
+                >
+                  <Camera size={18} />
+                  Caméra
+                </button>
+                <button
+                  onClick={() => galleryInputRef.current?.click()}
+                  style={{
+                    display: "flex", alignItems: "center", gap: "8px",
+                    background: "rgba(255,255,255,0.07)",
+                    border: "1px solid rgba(255,255,255,0.15)",
+                    borderRadius: "14px",
+                    padding: "12px 20px",
+                    color: "rgba(255,255,255,0.8)", fontWeight: 600, fontSize: "14px",
+                    fontFamily: "'Space Grotesk', sans-serif",
+                    cursor: "pointer",
+                  }}
+                >
+                  <Images size={18} />
+                  Galerie
+                </button>
+              </div>
+
+              {/* Input caméra (capture) */}
+              <input
+                ref={cameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                style={{ display: "none" }}
+                onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+              />
+              {/* Input galerie (pas de capture) */}
+              <input
+                ref={galleryInputRef}
+                type="file"
+                accept="image/*"
+                style={{ display: "none" }}
+                onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+              />
             </div>
+          ) : (
+            /* ── Desktop : drag & drop classique ── */
+            <div
+              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={onDrop}
+              onClick={() => fileInputRef.current?.click()}
+              style={{
+                border: `2px dashed ${isDragging ? "#FF3B5C" : "rgba(255,255,255,0.15)"}`,
+                borderRadius: "24px",
+                padding: "60px 24px",
+                textAlign: "center",
+                cursor: "pointer",
+                background: isDragging ? "rgba(255,59,92,0.05)" : "rgba(255,255,255,0.02)",
+                transition: "all 0.3s",
+                position: "relative", overflow: "hidden",
+              }}
+            >
+              {/* Grille décorative */}
+              <div style={{
+                position: "absolute", inset: 0, opacity: 0.03,
+                backgroundImage: "linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)",
+                backgroundSize: "32px 32px",
+              }} />
 
-            <p style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: "18px", marginBottom: "8px" }}>
-              Glisse ton look ici
-            </p>
-            <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "14px", marginBottom: "20px" }}>
-              ou clique pour choisir un fichier
-            </p>
-            <span style={{
-              background: "rgba(255,59,92,0.15)",
-              border: "1px solid rgba(255,59,92,0.3)",
-              borderRadius: "8px",
-              padding: "4px 12px",
-              fontSize: "12px",
-              color: "#FF3B5C",
-              fontWeight: 600,
-            }}>
-              JPG, PNG, WEBP — max 10MB
-            </span>
+              <div style={{
+                width: "72px", height: "72px",
+                background: "linear-gradient(135deg, rgba(255,59,92,0.2), rgba(255,59,92,0.05))",
+                borderRadius: "20px",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                margin: "0 auto 20px",
+                border: "1px solid rgba(255,59,92,0.3)",
+              }}>
+                <ImagePlus size={32} color="#FF3B5C" />
+              </div>
 
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              style={{ display: "none" }}
-              onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
-            />
-          </div>
+              <p style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: "18px", marginBottom: "8px" }}>
+                Glisse ton look ici
+              </p>
+              <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "14px", marginBottom: "20px" }}>
+                ou clique pour choisir un fichier
+              </p>
+              <span style={{
+                background: "rgba(255,59,92,0.15)",
+                border: "1px solid rgba(255,59,92,0.3)",
+                borderRadius: "8px",
+                padding: "4px 12px",
+                fontSize: "12px",
+                color: "#FF3B5C",
+                fontWeight: 600,
+              }}>
+                JPG, PNG, WEBP — max 10MB
+              </span>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                style={{ display: "none" }}
+                onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+              />
+            </div>
+          )
         ) : (
           /* Preview */
-          <div style={{ position: "relative", borderRadius: "24px", overflow: "hidden" }}>
-            <img
+          <div style={{ position: "relative", borderRadius: "24px", overflow: "hidden", aspectRatio: "3 / 4" }}>
+            <Image
               src={preview}
               alt="Preview"
-              style={{ width: "100%", aspectRatio: "3/4", objectFit: "cover", display: "block" }}
+              fill
+              sizes="(max-width: 560px) 100vw, 500px"
+              unoptimized
+              style={{ objectFit: "cover" }}
             />
             <div style={{
               position: "absolute", inset: 0,
@@ -276,26 +440,53 @@ export default function UploadPage() {
             >
               <X size={16} />
             </button>
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              style={{
-                position: "absolute", bottom: "16px", right: "16px",
-                background: "rgba(255,59,92,0.9)",
-                border: "none", borderRadius: "12px",
-                padding: "8px 14px",
-                color: "#fff", fontSize: "13px", fontWeight: 600,
-                cursor: "pointer", display: "flex", alignItems: "center", gap: "6px",
-              }}
-            >
-              <Upload size={13} /> Changer
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              style={{ display: "none" }}
-              onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
-            />
+
+            {isMobile ? (
+              /* Mobile : caméra + galerie */
+              <div style={{ position: "absolute", bottom: "16px", right: "16px", display: "flex", gap: "8px" }}>
+                <button
+                  onClick={() => cameraInputRef.current?.click()}
+                  style={{
+                    background: "rgba(5,5,8,0.85)", border: "1px solid rgba(255,255,255,0.2)",
+                    borderRadius: "12px", padding: "8px 12px",
+                    color: "#fff", fontSize: "13px", fontWeight: 600,
+                    cursor: "pointer", display: "flex", alignItems: "center", gap: "5px",
+                  }}
+                >
+                  <Camera size={13} /> Photo
+                </button>
+                <button
+                  onClick={() => galleryInputRef.current?.click()}
+                  style={{
+                    background: "rgba(255,59,92,0.9)", border: "none",
+                    borderRadius: "12px", padding: "8px 12px",
+                    color: "#fff", fontSize: "13px", fontWeight: 600,
+                    cursor: "pointer", display: "flex", alignItems: "center", gap: "5px",
+                  }}
+                >
+                  <Images size={13} /> Galerie
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                style={{
+                  position: "absolute", bottom: "16px", right: "16px",
+                  background: "rgba(255,59,92,0.9)",
+                  border: "none", borderRadius: "12px",
+                  padding: "8px 14px",
+                  color: "#fff", fontSize: "13px", fontWeight: 600,
+                  cursor: "pointer", display: "flex", alignItems: "center", gap: "6px",
+                }}
+              >
+                <Upload size={13} /> Changer
+              </button>
+            )}
+
+            {/* Inputs cachés réutilisés */}
+            <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])} />
+            <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])} />
+            <input ref={galleryInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])} />
           </div>
         )}
 

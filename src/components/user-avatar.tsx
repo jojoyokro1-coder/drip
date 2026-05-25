@@ -56,6 +56,7 @@ export function UserAvatar({ src, username, size = 'md', className = '' }: UserA
         alt={username}
         width={px}
         height={px}
+        sizes={`${px}px`}
         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
       />
     </div>

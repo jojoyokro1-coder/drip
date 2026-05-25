@@ -5,39 +5,39 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   async headers() {
-  return [
-    {
-      source: "/:path*",
-      headers: [
-        {
-          key: "Access-Control-Allow-Origin",
-          value: "*",
-        },
-        {
-          key: "Access-Control-Allow-Methods",
-          value: "GET, POST, PUT, DELETE, OPTIONS",
-        },
-        {
-          key: "Access-Control-Allow-Headers",
-          value: "Content-Type, Authorization",
-        },
-        {
-          key: "Access-Control-Max-Age",
-          value: "86400",
-        },
-        {
-          key: "X-Frame-Options",
-          value: "ALLOWALL",
-        },
-        {
-          key: "Content-Security-Policy",
-          value: "frame-ancestors 'self' *",
-        },
-      ],
-    },
-  ];
-},
-allowedDevOrigins: ['192.168.137.1'],
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          {
+            key: "Access-Control-Allow-Origin",
+            value: "*",
+          },
+          {
+            key: "Access-Control-Allow-Methods",
+            value: "GET, POST, PUT, DELETE, OPTIONS",
+          },
+          {
+            key: "Access-Control-Allow-Headers",
+            value: "Content-Type, Authorization",
+          },
+          {
+            key: "Access-Control-Max-Age",
+            value: "86400",
+          },
+          {
+            key: "X-Frame-Options",
+            value: "ALLOWALL",
+          },
+          {
+            key: "Content-Security-Policy",
+            value: "frame-ancestors 'self' *",
+          },
+        ],
+      },
+    ];
+  },
+  allowedDevOrigins: ["10.10.10.113", "10.10.10.128", "192.168.137.1"],
 
   images: {
     remotePatterns: [
@@ -52,7 +52,13 @@ allowedDevOrigins: ['192.168.137.1'],
       },
       {
         hostname: "cdn.chat2db-ai.com",
-      }
+      },
+      {
+        hostname: "vyyxczkkdewbwujbqlyk.supabase.co",
+      },
+      {
+        hostname: "picsum.photos",
+      },
     ],
   },
 };

@@ -1,24 +1,11 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-
-function getSupabaseAdmin() {
-  const url = process.env.DATABASE_URL || process.env.NEXT_PUBLIC_DATABASE_URL || "";
-  const key = process.env.DATABASE_SERVICE_ROLE_KEY || "";
-
-  return createClient(url, key);
-}
-
-function isConfigured() {
-  const url = process.env.DATABASE_URL || process.env.NEXT_PUBLIC_DATABASE_URL || "";
-  const key = process.env.DATABASE_SERVICE_ROLE_KEY || "";
-  const invalidUrl = !url || url.includes("example.supabase.co");
-  const invalidKey = !key || key.includes("demo-service-role-key");
-  return !invalidUrl && !invalidKey;
-}
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 export async function POST(request: Request) {
   try {
-    if (!isConfigured()) {
+    const admin = getSupabaseAdmin();
+
+    if (!admin) {
       return NextResponse.json(
         {
           error:
@@ -48,8 +35,6 @@ export async function POST(request: Request) {
     if (password.length < 6) {
       return NextResponse.json({ error: "Le mot de passe doit contenir au moins 6 caracteres." }, { status: 400 });
     }
-
-    const admin = getSupabaseAdmin();
 
     const { data: existingProfile } = await admin
       .from("profiles")

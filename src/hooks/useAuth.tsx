@@ -18,6 +18,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const LOCAL_USERS_KEY = 'drip_local_users';
 const LOCAL_CURRENT_USER_KEY = 'drip_local_current_user';
+const SESSION_BACKUP_KEY = 'drip_session_backup';
 
 type LocalUser = {
   id: string;
@@ -117,6 +118,17 @@ function createLocalAuthUser(email: string, password: string, username: string) 
   return { user: created, error: null };
 }
 
+async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit, timeoutMs = 10000) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -143,9 +155,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
+    supabase.auth.getSession().then(async ({ data: { session: initialSession } }) => {
+      if (initialSession) {
+        setSession(initialSession);
+        setUser(initialSession.user ?? null);
+        setLoading(false);
+        return;
+      }
+
+      // Restore from backup if Supabase client lost the session
+      try {
+        const backupRaw = sessionStorage.getItem(SESSION_BACKUP_KEY);
+        if (backupRaw) {
+          const backup = JSON.parse(backupRaw);
+          setUser(backup.user ?? null);
+          setSession(backup);
+          setLoading(false);
+
+          supabase.auth.setSession({
+            access_token: backup.access_token,
+            refresh_token: backup.refresh_token || '',
+          }).then(({ data: { session: restored } }) => {
+            if (restored) {
+              setSession(restored);
+              setUser(restored.user ?? null);
+              sessionStorage.removeItem(SESSION_BACKUP_KEY);
+            }
+          }).catch(() => {});
+          return;
+        }
+      } catch { /* ignore */ }
+
+      setSession(null);
+      setUser(null);
       setLoading(false);
     }).catch(() => setLoading(false));
 
@@ -172,7 +214,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const normalizedEmail = normalizeEmail(email);
       const normalizedUsername = normalizeUsername(username);
 
-      const response = await fetch("/api/register", {
+      const response = await fetchWithTimeout("/api/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: normalizedEmail, password, username: normalizedUsername }),
@@ -191,16 +233,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { error: new Error(data?.error || "Erreur lors de l'inscription") };
       }
 
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: normalizedEmail,
-        password,
-      });
-
-      if (signInError) {
-        return { error: signInError as Error };
-      }
-
-      return { error: null };
+      return await signIn(normalizedEmail, password);
     } catch (err) {
       const { user: localUser, error } = createLocalAuthUser(email, password, username);
       if (!error && localUser) {
@@ -214,26 +247,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     try {
-      const localUser = findLocalUser(email, password);
-      if (localUser) {
-        localStorage.setItem(LOCAL_CURRENT_USER_KEY, JSON.stringify(localUser));
-        setUser(toUser(localUser));
-        setSession(null);
-        return { error: null };
-      }
-
       if (!useSupabase) {
+        const localUser = findLocalUser(email, password);
+        if (localUser) {
+          localStorage.setItem(LOCAL_CURRENT_USER_KEY, JSON.stringify(localUser));
+          setUser(toUser(localUser));
+          setSession(null);
+          return { error: null };
+        }
+
         return { error: new Error('Email/pseudo ou mot de passe incorrect.') };
       }
 
       const normalizedEmail = normalizeEmail(email);
-      const { error } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
+      const response = await fetchWithTimeout("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: normalizedEmail, password }),
+      });
+      const data = await response.json().catch(() => ({}));
 
-      if (!error) {
+      if (response.ok && data.session && data.user) {
+        setSession(data.session);
+        setUser(data.user);
+
+        try {
+          sessionStorage.setItem(SESSION_BACKUP_KEY, JSON.stringify(data.session));
+        } catch { /* ignore */ }
+
+        void supabase.auth.setSession({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        }).catch(() => {
+          // Server already authenticated the user. Keep the UI session alive
+          // even if the mobile browser cannot reach Supabase directly.
+        });
+
         return { error: null };
       }
 
-      const message = error.message?.toLowerCase() || "";
+      if (data?.code === "SUPABASE_NOT_CONFIGURED") {
+        const localUser = findLocalUser(email, password);
+        if (localUser) {
+          localStorage.setItem(LOCAL_CURRENT_USER_KEY, JSON.stringify(localUser));
+          setUser(toUser(localUser));
+          setSession(null);
+          return { error: null };
+        }
+      }
+
+      const message = String(data?.error || "").toLowerCase();
       if (message.includes("email not confirmed") || message.includes("not confirmed")) {
         return {
           error: new Error(
@@ -242,7 +305,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
       }
 
-      return { error: error as Error | null };
+      return { error: new Error(data?.error || "Email/pseudo ou mot de passe incorrect.") };
     } catch (err) {
       return { error: err as Error };
     }
@@ -250,6 +313,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     localStorage.removeItem(LOCAL_CURRENT_USER_KEY);
+    try { sessionStorage.removeItem(SESSION_BACKUP_KEY); } catch { /* ignore */ }
     setUser(null);
     setSession(null);
 

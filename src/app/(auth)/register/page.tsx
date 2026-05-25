@@ -1,15 +1,26 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { Loader2, Eye, EyeOff, Zap, AtSign, Mail, Lock } from 'lucide-react';
 
+const REDIRECT_KEY = 'drip_login_redirect';
+
 export default function RegisterPage() {
   const router = useRouter();
+  const redirectRef = useRef('/');
   const { signUp } = useAuth();
   const [username, setUsername] = useState('');
+
+  useEffect(() => {
+    try {
+      const r = sessionStorage.getItem(REDIRECT_KEY);
+      sessionStorage.removeItem(REDIRECT_KEY);
+      if (r) { redirectRef.current = r; }
+    } catch { /* ignore */ }
+  }, []);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -26,7 +37,7 @@ export default function RegisterPage() {
     setLoading(true);
     const { error } = await signUp(email, password, username);
     if (error) { setError(error.message || "Erreur lors de l'inscription"); setLoading(false); }
-    else { router.push('/'); }
+    else { router.push(redirectRef.current); }
   };
 
   const inputStyle = {
@@ -52,7 +63,7 @@ export default function RegisterPage() {
 
   return (
     <div style={{
-      minHeight: '100vh',
+      minHeight: '100dvh',
       background: '#050508',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       padding: '24px 16px', position: 'relative', overflow: 'hidden',
@@ -145,7 +156,10 @@ export default function RegisterPage() {
 
         <p style={{ textAlign: 'center', marginTop: '24px', color: '#555', fontSize: '14px' }}>
           Déjà un compte ?{' '}
-          <Link href="/login" style={{ color: '#FF3B5C', textDecoration: 'none', fontWeight: 600 }}>
+          <Link
+            href="/login"
+            onClick={() => { try { sessionStorage.setItem(REDIRECT_KEY, redirectRef.current); } catch { /* ignore */ } }}
+            style={{ color: '#FF3B5C', textDecoration: 'none', fontWeight: 600 }}>
             Se connecter
           </Link>
         </p>

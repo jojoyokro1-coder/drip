@@ -1,24 +1,29 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { Loader2, Eye, EyeOff, Zap } from 'lucide-react';
 
+const REDIRECT_KEY = 'drip_login_redirect';
+
 export default function LoginPage() {
   const router = useRouter();
-  const { signIn, signOut } = useAuth();
+  const redirectRef = useRef('/');
+  const { signIn } = useAuth();
   const [email, setEmail] = useState('');
+
+  useEffect(() => {
+    try {
+      const r = sessionStorage.getItem(REDIRECT_KEY);
+      if (r) { redirectRef.current = r; }
+    } catch { /* ignore */ }
+  }, []);
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    void signOut();
-    // Force a fresh auth state when arriving on the login screen.
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,13 +34,13 @@ export default function LoginPage() {
       setError(error.message || 'Erreur de connexion');
       setLoading(false);
     } else {
-      router.push('/');
+      router.push(redirectRef.current);
     }
   };
 
   return (
     <div style={{
-      minHeight: '100vh',
+      minHeight: '100dvh',
       background: '#050508',
       display: 'flex',
       alignItems: 'center',
@@ -211,7 +216,10 @@ export default function LoginPage() {
 
         <p style={{ textAlign: 'center', marginTop: '24px', color: '#555', fontSize: '14px' }}>
           Pas encore de compte ?{' '}
-          <Link href="/register" style={{ color: '#FF3B5C', textDecoration: 'none', fontWeight: 600 }}>
+          <Link
+            href="/register"
+            onClick={() => { try { sessionStorage.setItem(REDIRECT_KEY, redirectRef.current); } catch { /* ignore */ } }}
+            style={{ color: '#FF3B5C', textDecoration: 'none', fontWeight: 600 }}>
             Rejoindre DRIP
           </Link>
         </p>

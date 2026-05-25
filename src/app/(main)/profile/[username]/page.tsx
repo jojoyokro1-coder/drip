@@ -1,17 +1,21 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useParams } from 'next/navigation';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { UserAvatar } from '@/components/user-avatar';
 import { FollowButton } from '@/components/follow-button';
 import { LookCard } from '@/components/look-card';
-import { Edit3, Loader2, Zap, Grid3X3, Heart } from 'lucide-react';
+import { Edit3, Loader2, PlusCircle, Zap, Grid3X3, Heart, Bookmark } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { UploadActionSheet } from '@/components/upload-action-sheet';
 import { Profile, Look } from '@/types';
 import { useRouter } from 'next/navigation';
+import { getLocalFollowersCount, getLocalFollowingCount } from '@/lib/local-follows';
+import { getLocalSavedLooks, getLocalSavesData } from '@/lib/local-saves';
 
 interface ProfileWithStats extends Profile {
   looks_count: number;
@@ -20,13 +24,13 @@ interface ProfileWithStats extends Profile {
   total_likes: number;
 }
 
-interface LookWithProfile extends Look {
+interface LookWithProfile extends Omit<Look, 'profile'> {
   profile?: { username: string; avatar_url: string };
 }
 
 function ProfileSkeleton() {
   return (
-    <div style={{ minHeight: '100vh', background: '#050508', paddingBottom: '90px', fontFamily: "'Space Grotesk', system-ui, sans-serif" }}>
+    <div style={{ minHeight: '100dvh', background: '#050508', paddingBottom: '90px', fontFamily: "'Space Grotesk', system-ui, sans-serif" }}>
       {/* Banner */}
       <div style={{ position: 'relative', height: '140px', overflow: 'hidden' }}>
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(255,59,92,0.1) 0%, rgba(120,40,200,0.08) 50%, rgba(5,5,8,1) 100%)' }} />
@@ -104,47 +108,75 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState<ProfileWithStats | null>(null);
   const [looks, setLooks] = useState<LookWithProfile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [userLikes, setUserLikes] = useState<Set<string>>(new Set());
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [activeTab, setActiveTab] = useState<'looks' | 'saved'>('looks');
+  const [savedLooks, setSavedLooks] = useState<{ id: string; image_url: string; description?: string }[]>([]);
   const useSupabase = isSupabaseConfigured();
+
+  useEffect(() => {
+    setIsMobile(window.innerWidth < 768);
+  }, []);
+
+  const handleFile = useCallback((file: File) => {
+    file.arrayBuffer().then((buffer) => {
+      const blob = new Blob([buffer], { type: file.type });
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        sessionStorage.setItem('drip_pending_upload', dataUrl);
+        sessionStorage.setItem('drip_pending_upload_type', file.type);
+        setUploadOpen(false);
+        router.push('/upload');
+      };
+      reader.readAsDataURL(blob);
+    });
+  }, [router]);
 
   useEffect(() => {
     loadProfile();
     if (user) loadUserLikes();
   }, [username, user]);
 
-  useEffect(() => {
-    if (profile) loadLooks(profile.id);
-  }, [profile]);
-
   const loadProfile = async () => {
+    setLoadError(null);
     if (!useSupabase) {
       if (user?.user_metadata?.username === username) {
-        setProfile({ id: user.id, username: String(user.user_metadata?.username || ''), bio: String(user.user_metadata?.bio || ''), avatar_url: String(user.user_metadata?.avatar_url || ''), created_at: new Date().toISOString(), looks_count: 0, followers_count: 0, following_count: 0, total_likes: 0 });
+        const followersCount = getLocalFollowersCount(user.id);
+        const followingCount = getLocalFollowingCount(user.id);
+        setProfile({ id: user.id, username: String(user.user_metadata?.username || ''), bio: String(user.user_metadata?.bio || ''), avatar_url: String(user.user_metadata?.avatar_url || ''), created_at: new Date().toISOString(), looks_count: 0, followers_count: followersCount, following_count: followingCount, total_likes: 0 });
       }
       setLoading(false);
       return;
     }
     try {
-      const { data } = await supabase.from('profiles').select('*').eq('username', username).maybeSingle();
-      if (data) {
-        const { count: looksCount } = await supabase.from('looks').select('*', { count: 'exact', head: true }).eq('user_id', data.id);
-        const { count: followersCount } = await supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', data.id);
-        const { count: followingCount } = await supabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', data.id);
-        const { data: userLikesData } = await supabase.from('looks').select('likes_count').eq('user_id', data.id);
-        const totalLikes = userLikesData?.reduce((sum, l) => sum + (l.likes_count || 0), 0) || 0;
-        setProfile({ ...data, looks_count: looksCount || 0, followers_count: followersCount || 0, following_count: followingCount || 0, total_likes: totalLikes } as ProfileWithStats);
-      }
-    } catch (e) { console.error(e); }
-    finally { setLoading(false); }
-  };
+      const response = await fetch(`/api/profile/${encodeURIComponent(username)}`, {
+        cache: 'no-store',
+      });
 
-  const loadLooks = async (profileId?: string) => {
-    const id = profileId || profile?.id;
-    if (!id || !useSupabase) { setLooks([]); return; }
-    try {
-      const { data } = await supabase.from('looks').select('*').eq('user_id', id).order('created_at', { ascending: false });
-      if (data) setLooks(data as LookWithProfile[]);
-    } catch (e) { console.error(e); }
+      if (response.status === 404) {
+        setProfile(null);
+        setLooks([]);
+        setLoadError(null);
+        return;
+      }
+
+      if (!response.ok) {
+        setLoadError('Impossible de charger le profil.');
+        setProfile(null);
+        return;
+      }
+
+      const data = await response.json();
+      setProfile(data.profile as ProfileWithStats);
+      setLooks((data.looks || []) as LookWithProfile[]);
+    } catch (e) {
+      console.error(e);
+      setLoadError('Erreur de connexion. Vérifie ton réseau.');
+    }
+    finally { setLoading(false); }
   };
 
   const loadUserLikes = async () => {
@@ -155,13 +187,51 @@ export default function ProfilePage() {
     } catch (e) { console.error(e); }
   };
 
+  const loadSavedLooks = useCallback(async () => {
+    const saved = getLocalSavedLooks();
+    const missing = saved.filter(s => !s.image_url);
+    if (missing.length > 0) {
+      if (useSupabase) {
+        const ids = missing.map(m => m.id);
+        try {
+          const { data } = await supabase.from('looks').select('id, image_url, description').in('id', ids);
+          if (data) {
+            const dataStore = getLocalSavesData();
+            for (const look of data) {
+              dataStore[look.id] = { image_url: look.image_url, description: look.description || '' };
+            }
+            localStorage.setItem('drip_saves_data', JSON.stringify(dataStore));
+          }
+        } catch {}
+      }
+    }
+    setSavedLooks(getLocalSavedLooks());
+  }, [useSupabase]);
+
+  useEffect(() => {
+    if (activeTab === 'saved') loadSavedLooks();
+  }, [activeTab, loadSavedLooks]);
+
   if (loading) {
     return <ProfileSkeleton />;
   }
 
+  if (loadError) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100dvh', padding: '24px', textAlign: 'center', background: '#050508', fontFamily: "'Space Grotesk', system-ui, sans-serif" }}>
+        <div style={{ width: '56px', height: '56px', background: 'rgba(255,59,92,0.1)', border: '1px solid rgba(255,59,92,0.2)', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
+          <span style={{ fontSize: '24px' }}>⚠️</span>
+        </div>
+        <h2 style={{ fontFamily: "'Syne', system-ui, sans-serif", fontSize: '24px', fontWeight: 800, color: 'white', marginBottom: '8px' }}>Erreur</h2>
+        <p style={{ color: '#666', marginBottom: '24px' }}>{loadError}</p>
+        <button onClick={loadProfile} style={{ padding: '12px 24px', background: 'linear-gradient(135deg, #FF3B5C, #c0135e)', border: 'none', borderRadius: '14px', color: 'white', fontWeight: 700, fontSize: '14px', cursor: 'pointer', boxShadow: '0 4px 16px rgba(255,59,92,0.35)' }}>Réessayer</button>
+      </div>
+    );
+  }
+
   if (!profile) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '24px', textAlign: 'center', background: '#050508', fontFamily: "'Space Grotesk', system-ui, sans-serif" }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100dvh', padding: '24px', textAlign: 'center', background: '#050508', fontFamily: "'Space Grotesk', system-ui, sans-serif" }}>
         <h2 style={{ fontFamily: "'Syne', system-ui, sans-serif", fontSize: '24px', fontWeight: 800, color: 'white', marginBottom: '8px' }}>Utilisateur introuvable</h2>
         <p style={{ color: '#666' }}>Ce profil n'existe pas.</p>
       </div>
@@ -184,7 +254,9 @@ export default function ProfilePage() {
   );
 
   return (
-    <div style={{ minHeight: '100vh', background: '#050508', paddingBottom: '90px', fontFamily: "'Space Grotesk', system-ui, sans-serif" }}>
+    <>
+      <UploadActionSheet open={uploadOpen} onClose={() => setUploadOpen(false)} onFile={handleFile} />
+      <div style={{ minHeight: '100dvh', background: '#050508', paddingBottom: '90px', fontFamily: "'Space Grotesk', system-ui, sans-serif" }}>
 
       {/* Banner glow */}
       <div style={{ position: 'relative', height: '140px', overflow: 'hidden' }}>
@@ -223,7 +295,13 @@ export default function ProfilePage() {
                 </button>
               </>
             ) : user ? (
-              <FollowButton userId={profile.id} initialFollowing={false} initialCount={profile.followers_count} />
+              <FollowButton
+                userId={profile.id}
+                initialCount={profile.followers_count}
+                onToggle={(_, count) => {
+                  setProfile(prev => prev ? { ...prev, followers_count: count } : prev);
+                }}
+              />
             ) : (
               <Link href="/login" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '9px 18px', background: 'linear-gradient(135deg, #FF3B5C, #c0135e)', borderRadius: '20px', color: 'white', textDecoration: 'none', fontSize: '13px', fontWeight: 700, boxShadow: '0 4px 16px rgba(255,59,92,0.35)' }}>
                 Suivre
@@ -251,34 +329,92 @@ export default function ProfilePage() {
           {statCard(profile.following_count, 'Following')}
         </div>
 
-        {/* Section title */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-          <Grid3X3 size={16} color="#FF3B5C" />
-          <span style={{ color: 'white', fontSize: '14px', fontWeight: 600, letterSpacing: '-0.2px' }}>Looks</span>
-          <span style={{ color: '#555', fontSize: '13px' }}>({profile.looks_count})</span>
+        {/* Tabs */}
+        <div style={{ display: 'flex', gap: '0', marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+          <button onClick={() => setActiveTab('looks')}
+            style={{
+              flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+              background: 'none', border: 'none', padding: '10px 0', cursor: 'pointer',
+              color: activeTab === 'looks' ? 'white' : '#555',
+              borderBottom: activeTab === 'looks' ? '2px solid #FF3B5C' : '2px solid transparent',
+              marginBottom: '-12px', transition: 'all 0.2s',
+            }}>
+            <Grid3X3 size={16} color={activeTab === 'looks' ? '#FF3B5C' : '#555'} />
+            <span style={{ fontSize: '14px', fontWeight: 600 }}>Looks</span>
+            <span style={{ fontSize: '12px', color: '#555' }}>({profile.looks_count})</span>
+          </button>
+          {isOwnProfile && (
+            <button onClick={() => setActiveTab('saved')}
+              style={{
+                flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                background: 'none', border: 'none', padding: '10px 0', cursor: 'pointer',
+                color: activeTab === 'saved' ? 'white' : '#555',
+                borderBottom: activeTab === 'saved' ? '2px solid #FF3B5C' : '2px solid transparent',
+                marginBottom: '-12px', transition: 'all 0.2s',
+              }}>
+              <Bookmark size={16} color={activeTab === 'saved' ? '#FF3B5C' : '#555'} fill={activeTab === 'saved' ? '#FF3B5C' : 'none'} />
+              <span style={{ fontSize: '14px', fontWeight: 600 }}>Sauvés</span>
+              <span style={{ fontSize: '12px', color: '#555' }}>({savedLooks.length})</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Looks grid */}
-      {looks.length > 0 ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '2px', padding: '0 2px' }}>
-          {looks.map((look) => (
-            <LookCard key={look.id} look={look} userLiked={userLikes.has(look.id)} variant="grid" />
-          ))}
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 24px', textAlign: 'center' }}>
-          <div style={{ width: '56px', height: '56px', background: 'rgba(255,59,92,0.1)', border: '1px solid rgba(255,59,92,0.2)', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
-            <Heart size={24} color="#FF3B5C" />
+      {/* Content grid */}
+      {activeTab === 'looks' ? (
+        looks.length > 0 ? (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '2px', padding: '0 2px' }}>
+            {looks.map((look) => (
+              <LookCard key={look.id} look={look} userLiked={userLikes.has(look.id)} variant="grid" />
+            ))}
           </div>
-          <p style={{ color: '#666', fontSize: '15px', marginBottom: isOwnProfile ? '16px' : '0' }}>Aucun look pour le moment</p>
-          {isOwnProfile && (
-            <Link href="/upload" style={{ display: 'inline-flex', alignItems: 'center', padding: '10px 24px', background: 'linear-gradient(135deg, #FF3B5C, #c0135e)', borderRadius: '20px', color: 'white', textDecoration: 'none', fontSize: '14px', fontWeight: 700, boxShadow: '0 4px 16px rgba(255,59,92,0.35)' }}>
-              Poster ton premier look →
-            </Link>
-          )}
-        </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 24px', textAlign: 'center' }}>
+            <div style={{ width: '56px', height: '56px', background: 'rgba(255,59,92,0.1)', border: '1px solid rgba(255,59,92,0.2)', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
+              <Heart size={24} color="#FF3B5C" />
+            </div>
+            <p style={{ color: '#666', fontSize: '15px', marginBottom: isOwnProfile ? '16px' : '0' }}>Aucun look pour le moment</p>
+            {isOwnProfile && (
+              <button
+                onClick={() => {
+                  if (isMobile) {
+                    setUploadOpen(true);
+                  } else {
+                    router.push('/upload');
+                  }
+                }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 24px', minHeight: '44px', background: 'linear-gradient(135deg, #FF3B5C, #c0135e)', borderRadius: '14px', color: 'white', textDecoration: 'none', fontSize: '14px', fontWeight: 700, border: 'none', cursor: 'pointer', boxShadow: '0 0 28px rgba(255,59,92,0.46)', letterSpacing: '0.02em', WebkitTapHighlightColor: 'transparent' }}>
+                <PlusCircle size={18} />
+                Poster ton premier look
+              </button>
+            )}
+          </div>
+        )
+      ) : (
+        savedLooks.length > 0 ? (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '2px', padding: '0 2px' }}>
+            {savedLooks.map((saved) => (
+              saved.image_url ? (
+                <Link key={saved.id} href={`/look/${saved.id}`} style={{ aspectRatio: '1 / 1', position: 'relative', overflow: 'hidden', borderRadius: '8px' }}>
+                  <Image src={saved.image_url} alt="" fill sizes="33vw" style={{ objectFit: 'cover' }} />
+                </Link>
+              ) : (
+                <Link key={saved.id} href={`/look/${saved.id}`} style={{ aspectRatio: '1 / 1', position: 'relative', overflow: 'hidden', borderRadius: '8px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Bookmark size={20} color="#555" />
+                </Link>
+              )
+            ))}
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 24px', textAlign: 'center' }}>
+            <div style={{ width: '56px', height: '56px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
+              <Bookmark size={24} color="#555" />
+            </div>
+            <p style={{ color: '#666', fontSize: '15px' }}>Aucun look sauvegardé</p>
+          </div>
+        )
       )}
     </div>
+    </>
   );
 }

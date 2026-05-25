@@ -11,7 +11,7 @@ interface LikeButtonProps {
   count?: number;
   onLikeToggle?: () => void;
   initialLiked?: boolean;
-  initialCount: number;
+  initialCount?: number;
   /** Compact : afficher uniquement icône + count, sans label */
   compact?: boolean;
 }
@@ -22,10 +22,10 @@ export default function LikeButton({
   count: countProp,
   onLikeToggle,
   initialLiked = false,
-  initialCount,
+  initialCount = 0,
   compact = false,
 }: LikeButtonProps) {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const [internalLiked, setInternalLiked] = useState(initialLiked);
   const [internalCount, setInternalCount] = useState(initialCount);
   const [loading, setLoading] = useState(false);
@@ -34,7 +34,7 @@ export default function LikeButton({
 
   const isControlled = likedProp !== undefined;
   const activeLiked = isControlled ? likedProp : internalLiked;
-  const activeCount = isControlled ? countProp ?? 0 : internalCount;
+  const activeCount = Math.max(0, isControlled ? countProp ?? 0 : internalCount);
 
   // Sync prop changes for uncontrolled mode
   useEffect(() => {
@@ -94,20 +94,40 @@ export default function LikeButton({
 
     setLoading(true);
 
-    if (internalLiked) {
-      setInternalLiked(false);
-      setInternalCount((c) => c - 1);
-      await supabase.from("likes").delete().eq("look_id", lookId).eq("user_id", user.id);
-      await supabase.from("looks").update({ likes_count: internalCount - 1 }).eq("id", lookId);
-    } else {
-      setInternalLiked(true);
-      setInternalCount((c) => c + 1);
-      // Animating is triggered by the activeLiked useEffect
-      await supabase.from("likes").insert({ look_id: lookId, user_id: user.id });
-      await supabase.from("looks").update({ likes_count: internalCount + 1 }).eq("id", lookId);
-    }
+    const wasLiked = internalLiked;
+    const previousCount = Math.max(0, internalCount);
+    const nextCount = wasLiked ? Math.max(0, previousCount - 1) : previousCount + 1;
 
-    setLoading(false);
+    try {
+      const token = session?.access_token;
+      if (!token) throw new Error("Session invalide");
+
+      setInternalLiked(!wasLiked);
+      setInternalCount(nextCount);
+
+      const response = await fetch("/api/likes", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ lookId }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.error || "Like error");
+      }
+
+      setInternalLiked(Boolean(data.liked));
+      setInternalCount(Math.max(0, data.count || 0));
+    } catch (err) {
+      console.error("Error toggling like:", err);
+      setInternalLiked(wasLiked);
+      setInternalCount(previousCount);
+    } finally {
+      setLoading(false);
+    }
   }, [user, internalLiked, internalCount, loading, lookId, onLikeToggle]);
 
   const formatCount = (n: number) => {
@@ -154,10 +174,10 @@ export default function LikeButton({
           display: "flex",
           alignItems: "center",
           gap: compact ? "6px" : "10px",
-          background: liked
+          background: activeLiked
             ? "linear-gradient(135deg, rgba(255,59,92,0.2), rgba(255,59,92,0.08))"
             : "rgba(255,255,255,0.05)",
-          border: liked
+          border: activeLiked
             ? "1px solid rgba(255,59,92,0.4)"
             : "1px solid rgba(255,255,255,0.08)",
           borderRadius: "100px",
@@ -166,7 +186,7 @@ export default function LikeButton({
           cursor: user ? "pointer" : "default",
           WebkitTapHighlightColor: "transparent",
           transition: "background 0.3s, border-color 0.3s, box-shadow 0.3s",
-          animation: liked && animating ? "glowPulse 0.6s ease" : "none",
+          animation: activeLiked && animating ? "glowPulse 0.6s ease" : "none",
           outline: "none",
           overflow: "visible",
         }}
@@ -184,7 +204,6 @@ export default function LikeButton({
               borderRadius: "50%",
               background: "#FF3B5C",
               pointerEvents: "none",
-              // @ts-expect-error CSS custom properties are valid inline style keys.
               "--tx": `${p.x}px`,
               "--ty": `${p.y}px`,
               animation: "particleFly 0.7s ease-out forwards",
@@ -200,7 +219,7 @@ export default function LikeButton({
             alignItems: "center",
             animation: animating
               ? "heartPop 0.55s cubic-bezier(0.36,0.07,0.19,0.97)"
-              : !liked && !animating
+              : !activeLiked && !animating
               ? undefined
               : "heartShake 0.3s ease",
             willChange: "transform",
@@ -208,9 +227,9 @@ export default function LikeButton({
         >
           <Heart
             size={compact ? 16 : 18}
-            fill={liked ? "#FF3B5C" : "none"}
-            color={liked ? "#FF3B5C" : "rgba(255,255,255,0.5)"}
-            strokeWidth={liked ? 0 : 1.8}
+            fill={activeLiked ? "#FF3B5C" : "none"}
+            color={activeLiked ? "#FF3B5C" : "rgba(255,255,255,0.5)"}
+            strokeWidth={activeLiked ? 0 : 1.8}
             style={{ transition: "fill 0.2s, color 0.2s" }}
           />
         </span>
@@ -220,7 +239,7 @@ export default function LikeButton({
           style={{
             fontSize: compact ? "13px" : "14px",
             fontWeight: 700,
-            color: liked ? "#FF3B5C" : "rgba(255,255,255,0.6)",
+            color: activeLiked ? "#FF3B5C" : "rgba(255,255,255,0.6)",
             fontFamily: "'Space Grotesk', sans-serif",
             display: "inline-block",
             animation: animating ? "countPop 0.5s cubic-bezier(0.36,0.07,0.19,0.97)" : "none",
@@ -228,19 +247,19 @@ export default function LikeButton({
             minWidth: "20px",
           }}
         >
-          {formatCount(count)}
+          {formatCount(activeCount)}
         </span>
 
         {/* Label optionnel */}
         {!compact && (
           <span style={{
             fontSize: "13px",
-            color: liked ? "rgba(255,59,92,0.7)" : "rgba(255,255,255,0.35)",
+            color: activeLiked ? "rgba(255,59,92,0.7)" : "rgba(255,255,255,0.35)",
             fontFamily: "'Space Grotesk', sans-serif",
             fontWeight: 500,
             transition: "color 0.2s",
           }}>
-            {liked ? "Liké" : "Liker"}
+            {activeLiked ? "Liké" : "Liker"}
           </span>
         )}
       </button>

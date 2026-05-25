@@ -1,6 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
 
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
+
+function getSafeStorageName(file: File) {
+  const extension = file.name.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+  const baseName = file.name
+    .replace(/\.[^.]+$/, '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60);
+
+  return `${baseName || 'look'}.${extension}`;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const supabaseAdmin = getSupabaseAdmin();
@@ -34,19 +50,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid file type' }, { status: 400 });
     }
 
-    // Validate file size (5MB max)
-    if (file.size > 5 * 1024 * 1024) {
-      return NextResponse.json({ error: 'File too large (max 5MB)' }, { status: 400 });
+    // Validate file size (10MB max)
+    if (file.size > MAX_IMAGE_SIZE) {
+      return NextResponse.json({ error: 'Image trop lourde (max 10MB)' }, { status: 400 });
     }
 
-    // Read file as base64
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
-    const base64 = buffer.toString('base64');
-    const dataUrl = `data:${file.type};base64,${base64}`;
 
     // Upload to Supabase Storage
-    const fileName = `${user.id}/${Date.now()}-${file.name}`;
+    const fileName = `${user.id}/${Date.now()}-${getSafeStorageName(file)}`;
     const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
       .from('looks')
       .upload(fileName, buffer, {
@@ -55,7 +68,10 @@ export async function POST(request: NextRequest) {
 
     if (uploadError) {
       console.error('Upload error:', uploadError);
-      return NextResponse.json({ error: 'Upload failed' }, { status: 500 });
+      return NextResponse.json(
+        { error: uploadError.message || 'Impossible d envoyer l image dans le bucket looks.' },
+        { status: 500 }
+      );
     }
 
     // Get public URL
@@ -70,13 +86,17 @@ export async function POST(request: NextRequest) {
         user_id: user.id,
         image_url: urlData.publicUrl,
         description: description || '',
+        likes_count: 0,
       })
       .select()
       .maybeSingle();
 
     if (insertError) {
       console.error('Insert error:', insertError);
-      return NextResponse.json({ error: 'Failed to create look' }, { status: 500 });
+      return NextResponse.json(
+        { error: insertError.message || 'Impossible de creer le look.' },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({ look });

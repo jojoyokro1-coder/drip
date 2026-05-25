@@ -2,8 +2,10 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { compressImageFile } from "@/lib/image-compression";
 import { ChevronLeft, Camera, Loader2, Check, AlertCircle, User, FileText } from "lucide-react";
 
 export default function EditProfilePage() {
@@ -40,10 +42,12 @@ export default function EditProfilePage() {
     fetchProfile();
   }, [user]);
 
-  const handleAvatarChange = (file: File) => {
+  const handleAvatarChange = async (file: File) => {
     if (!file.type.startsWith("image/")) return;
-    setAvatarFile(file);
-    setAvatarPreview(URL.createObjectURL(file));
+
+    const optimizedFile = await compressImageFile(file).catch(() => file);
+    setAvatarFile(optimizedFile);
+    setAvatarPreview(URL.createObjectURL(optimizedFile));
   };
 
   const handleSave = async () => {
@@ -105,7 +109,7 @@ export default function EditProfilePage() {
   if (loading) {
     return (
       <div style={{
-        minHeight: "100vh", background: "#050508",
+        minHeight: "100dvh", background: "#050508",
         display: "flex", alignItems: "center", justifyContent: "center",
       }}>
         <Loader2 size={32} color="#FF3B5C" style={{ animation: "spin 1s linear infinite" }} />
@@ -116,7 +120,7 @@ export default function EditProfilePage() {
 
   return (
     <div style={{
-      minHeight: "100vh",
+      minHeight: "100dvh",
       background: "#050508",
       color: "#fff",
       fontFamily: "'Space Grotesk', sans-serif",
@@ -200,7 +204,7 @@ export default function EditProfilePage() {
               display: "flex", alignItems: "center", justifyContent: "center",
             }}>
               {currentAvatar ? (
-                <img src={currentAvatar} alt="Avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                <Image src={currentAvatar} alt="Avatar" fill sizes="100px" unoptimized style={{ objectFit: "cover" }} />
               ) : (
                 <User size={40} color="rgba(255,255,255,0.3)" />
               )}
