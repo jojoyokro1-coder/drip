@@ -9,7 +9,7 @@ import { LikeButton } from './like-button';
 import { supabase } from '@/integrations/supabase/client';
 import { isLocalFollowing, toggleLocalFollow } from '@/lib/local-follows';
 import { isLocalSaved, toggleLocalSave } from '@/lib/local-saves';
-import { Bookmark, MessageCircle, Share2, UserCheck } from 'lucide-react';
+import { Bookmark, Heart, MessageCircle, Share2, UserCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 
@@ -275,17 +275,59 @@ export function LookCard({ look, userLiked = false, variant = 'feed', onCommentC
   };
 
   if (variant === 'grid') {
+    const likeButton = user ? (
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          handleLikeToggle();
+        }}
+        disabled={likeLoading}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '4px',
+          background: liked ? 'rgba(255,59,92,0.25)' : 'rgba(0,0,0,0.4)',
+          border: liked ? '1px solid rgba(255,59,92,0.4)' : '1px solid rgba(255,255,255,0.12)',
+          borderRadius: '20px',
+          padding: '4px 10px',
+          cursor: 'pointer',
+          WebkitTapHighlightColor: 'transparent',
+          color: liked ? '#FF3B5C' : 'white',
+          fontSize: '12px',
+          fontWeight: 700,
+          fontFamily: "'Space Grotesk', sans-serif",
+          backdropFilter: 'blur(4px)',
+          transition: 'all 0.2s',
+          minHeight: '32px',
+        }}
+      >
+        <Heart size={13} fill={liked ? '#FF3B5C' : 'none'} color={liked ? '#FF3B5C' : 'white'} strokeWidth={liked ? 0 : 1.8} />
+        <span>{Math.max(0, likesCount)}</span>
+      </button>
+    ) : (
+      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'white', fontSize: '12px', fontWeight: 700 }}>
+        <Heart size={13} fill="none" color="white" strokeWidth={1.8} />
+        <span>{Math.max(0, look.likes_count || 0)}</span>
+      </div>
+    );
+
     return (
-      <>
+      <div
+        style={{
+          position: 'relative',
+          aspectRatio: '1 / 1',
+          overflow: 'hidden',
+          borderRadius: '8px',
+          WebkitTapHighlightColor: 'transparent',
+        }}
+      >
         <Link
           href={`/look/${look.id}`}
           style={{
             display: 'block',
-            aspectRatio: '1 / 1',
+            width: '100%',
+            height: '100%',
             position: 'relative',
-            overflow: 'hidden',
-            borderRadius: '8px',
-            WebkitTapHighlightColor: 'transparent',
           }}
         >
           <Image
@@ -296,16 +338,11 @@ export function LookCard({ look, userLiked = false, variant = 'feed', onCommentC
             style={{ objectFit: 'cover' }}
           />
           <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.7), transparent 62%)' }} />
-          <div style={{ position: 'absolute', left: '8px', bottom: '8px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', color: '#fff' }}>
-              <svg style={{ width: '14px', height: '14px', fill: '#FF3B5C' }} viewBox="0 0 24 24">
-                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-              </svg>
-              <span style={{ fontSize: '12px', fontWeight: 700 }}>{Math.max(0, look.likes_count || 0)}</span>
-            </div>
-          </div>
         </Link>
-      </>
+        <div style={{ position: 'absolute', left: '8px', bottom: '8px' }}>
+          {likeButton}
+        </div>
+      </div>
     );
   }
 

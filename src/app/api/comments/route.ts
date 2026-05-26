@@ -1,16 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { supabaseAdmin } from "@/integrations/supabase/server";
 import { createNotification } from "@/lib/server-notifications";
 
 const COMMENT_MAX = 500;
 
 export async function GET(request: NextRequest) {
   try {
-    const supabaseAdmin = getSupabaseAdmin();
-    if (!supabaseAdmin) {
-      return NextResponse.json({ error: "Supabase server is not configured" }, { status: 500 });
-    }
-
     const lookId = request.nextUrl.searchParams.get("lookId");
     if (!lookId) {
       return NextResponse.json({ error: "lookId required" }, { status: 400 });
@@ -25,7 +20,7 @@ export async function GET(request: NextRequest) {
     if (error) {
       const msg = error.message || "";
       if (msg.includes("does not exist") || msg.includes("permission denied")) {
-        return NextResponse.json({ localFallback: true, comments: [] });
+        return NextResponse.json({ localFallback: true, comments: [] }, { status: 503 });
       }
       return NextResponse.json({ error: "Impossible de charger les commentaires." }, { status: 500 });
     }
@@ -36,13 +31,63 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function DELETE(request: NextRequest) {
   try {
-    const supabaseAdmin = getSupabaseAdmin();
-    if (!supabaseAdmin) {
-      return NextResponse.json({ error: "Supabase server is not configured" }, { status: 500 });
+    const authHeader = request.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const token = authHeader.split(" ")[1];
+    const {
+      data: { user },
+      error: authError,
+    } = await supabaseAdmin.auth.getUser(token);
+
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const commentId = request.nextUrl.searchParams.get("commentId");
+    if (!commentId) {
+      return NextResponse.json({ error: "commentId required" }, { status: 400 });
+    }
+
+    const { data: comment } = await supabaseAdmin
+      .from("comments")
+      .select("user_id, look_id")
+      .eq("id", commentId)
+      .maybeSingle();
+
+    if (!comment) {
+      return NextResponse.json({ error: "Commentaire introuvable." }, { status: 404 });
+    }
+
+    if (comment.user_id !== user.id) {
+      return NextResponse.json({ error: "Vous ne pouvez supprimer que vos propres commentaires." }, { status: 403 });
+    }
+
+    const { error: deleteError } = await supabaseAdmin
+      .from("comments")
+      .delete()
+      .eq("id", commentId);
+
+    if (deleteError) {
+      const msg = deleteError.message || "";
+      if (msg.includes("does not exist") || msg.includes("permission denied")) {
+        return NextResponse.json({ localFallback: true, deleted: true }, { status: 503 });
+      }
+      return NextResponse.json({ error: "Impossible de supprimer le commentaire." }, { status: 500 });
+    }
+
+    return NextResponse.json({ deleted: true });
+  } catch {
+    return NextResponse.json({ error: "Erreur serveur pendant la suppression du commentaire." }, { status: 500 });
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
     const authHeader = request.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

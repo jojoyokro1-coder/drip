@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Home, PlusCircle, Trophy, TrendingUp, User } from 'lucide-react';
+import { Compass, Home, PlusCircle, Trophy, TrendingUp, User } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { UploadActionSheet } from '@/components/upload-action-sheet';
 
@@ -14,6 +14,10 @@ const navLabelStyle: CSSProperties = {
   fontSize: '11px',
   fontWeight: 700,
   lineHeight: 1,
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  maxWidth: '100%',
 };
 
 function navItemStyle(active: boolean): CSSProperties {
@@ -113,9 +117,10 @@ export function BottomNav() {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: '1fr 1fr 58px 1fr 1fr',
+            gridTemplateColumns: '1fr 1fr 58px 1fr 1fr 1fr',
             alignItems: 'end',
             gap: '4px',
+            overflow: 'hidden',
           }}
         >
           <Link href="/" style={navItemStyle(pathname === '/')}>
@@ -145,11 +150,16 @@ export function BottomNav() {
               border: 'none',
               cursor: 'pointer',
               WebkitTapHighlightColor: 'transparent',
-              transform: 'translateY(-8px)',
+              transform: 'translateY(-3px)',
             }}
           >
             <PlusCircle size={26} />
           </button>
+
+          <Link href="/explore" style={navItemStyle(pathname.startsWith('/explore'))}>
+            <Compass size={22} />
+            <span style={navLabelStyle}>Decouv</span>
+          </Link>
 
           <Link href="/trends" style={navItemStyle(pathname.startsWith('/trends'))}>
             <TrendingUp size={22} />

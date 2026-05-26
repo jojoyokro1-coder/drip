@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { MessageCircle, Send, X } from 'lucide-react';
+import { MessageCircle, Send, Trash2, X } from 'lucide-react';
 import { UserAvatar } from '@/components/user-avatar';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -20,6 +20,8 @@ export function CommentsDrawer({ lookId, open, onClose }: { lookId: string; open
   const [newComment, setNewComment] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -31,13 +33,14 @@ export function CommentsDrawer({ lookId, open, onClose }: { lookId: string; open
   const loadComments = useCallback(async () => {
     try {
       const response = await fetch(`/api/comments?lookId=${encodeURIComponent(lookId)}`, { cache: 'no-store' });
-      if (!response.ok) throw new Error('API comments unavailable');
-      const data = await response.json();
-      setComments(data.comments || []);
-    } catch {
-      const stored = localStorage.getItem(`drip_comments_${lookId}`);
-      setComments(stored ? JSON.parse(stored) : []);
-    }
+      const data = await response.json().catch(() => ({}));
+      if (response.ok && data.comments) {
+        setComments(data.comments);
+        return;
+      }
+    } catch {}
+    const stored = localStorage.getItem(`drip_comments_${lookId}`);
+    setComments(stored ? JSON.parse(stored) : []);
   }, [lookId]);
 
   useEffect(() => {
@@ -89,7 +92,7 @@ export function CommentsDrawer({ lookId, open, onClose }: { lookId: string; open
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
         if (data?.localFallback) {
-          // Table doesn't exist — save locally without showing error
+          // Table doesn't exist — save locally
           const comment: Comment = {
             id: Date.now().toString(),
             user_id: user?.id || 'local',
@@ -107,12 +110,15 @@ export function CommentsDrawer({ lookId, open, onClose }: { lookId: string; open
           setLoading(false);
           return;
         }
-        throw new Error(data?.error || "Impossible d'envoyer le commentaire.");
+        console.error("Comment POST error:", response.status, data);
+        throw new Error(data?.error || `Erreur ${response.status}`);
       }
 
       setComments((current) => [...current, data.comment]);
       setNewComment('');
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("Comment POST catch:", msg);
       const comment: Comment = {
         id: Date.now().toString(),
         user_id: user?.id || 'local',
@@ -130,9 +136,49 @@ export function CommentsDrawer({ lookId, open, onClose }: { lookId: string; open
       localStorage.setItem(`drip_comments_${lookId}`, JSON.stringify(updated));
       setComments(updated);
       setNewComment('');
-      setError("Commentaire sauvegardé localement.");
+      setError(msg);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const deleteComment = async (commentId: string) => {
+    setDeletingId(commentId);
+    const token = session?.access_token;
+
+    if (!token || !user) {
+      const updated = comments.filter((c) => c.id !== commentId);
+      localStorage.setItem(`drip_comments_${lookId}`, JSON.stringify(updated));
+      setComments(updated);
+      setDeletingId(null);
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/comments?commentId=${encodeURIComponent(commentId)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        if (data?.localFallback) {
+          const updated = comments.filter((c) => c.id !== commentId);
+          localStorage.setItem(`drip_comments_${lookId}`, JSON.stringify(updated));
+          setComments(updated);
+          setDeletingId(null);
+          return;
+        }
+        throw new Error(data?.error || "Impossible de supprimer le commentaire.");
+      }
+
+      setComments((current) => current.filter((c) => c.id !== commentId));
+    } catch (err) {
+      console.error('Delete comment error:', err);
+      setError("Impossible de supprimer le commentaire.");
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -182,12 +228,37 @@ export function CommentsDrawer({ lookId, open, onClose }: { lookId: string; open
                 ) : (
                   <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'rgba(255,255,255,0.1)', flexShrink: 0 }} />
                 )}
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-                    <span style={{ fontWeight: 600, color: 'white', fontSize: '13px', fontFamily: "'Syne', sans-serif" }}>{c.profile?.username || 'Anonyme'}</span>
-                    <span style={{ fontSize: '11px', color: '#555' }}>{new Date(c.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontWeight: 600, color: 'white', fontSize: '13px', fontFamily: "'Syne', sans-serif", flexShrink: 0 }}>{c.profile?.username || 'Anonyme'}</span>
+                    <span style={{ fontSize: '11px', color: '#555', flexShrink: 0 }}>{new Date(c.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}</span>
                   </div>
                   <p style={{ margin: '4px 0 0', color: 'rgba(255,255,255,0.85)', fontSize: '14px', lineHeight: 1.4 }}>{c.content}</p>
+                  {user && c.user_id === user.id && (
+                    <button
+                      onClick={() => setConfirmDeleteId(c.id)}
+                      style={{
+                        marginTop: '8px',
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        padding: '10px',
+                        borderRadius: '10px',
+                        background: 'rgba(255,59,92,0.1)',
+                        border: '1px solid rgba(255,59,92,0.15)',
+                        color: '#FF3B5C',
+                        cursor: 'pointer',
+                        fontFamily: "'Space Grotesk', sans-serif",
+                        fontSize: '13px',
+                        fontWeight: 600,
+                      }}
+                    >
+                      <Trash2 size={15} />
+                      Supprimer
+                    </button>
+                  )}
                 </div>
               </div>
             ))
@@ -224,6 +295,88 @@ export function CommentsDrawer({ lookId, open, onClose }: { lookId: string; open
         </div>
         {error && <p style={{ color: '#FF3B5C', fontSize: '12px', margin: '0 16px 12px' }}>{error}</p>}
       </div>
+
+      {/* Confirmation de suppression */}
+      {confirmDeleteId && (
+        <div
+          onClick={() => setConfirmDeleteId(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1100,
+            padding: '24px',
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#0d0d14',
+              border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: '20px',
+              padding: '24px',
+              maxWidth: '320px',
+              width: '100%',
+              textAlign: 'center',
+            }}
+          >
+            <div style={{ width: '48px', height: '48px', borderRadius: '16px', background: 'rgba(255,59,92,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+              <Trash2 size={22} color="#FF3B5C" />
+            </div>
+            <p style={{ color: 'white', fontWeight: 700, fontSize: '16px', fontFamily: "'Syne', sans-serif", margin: '0 0 4px' }}>
+              Supprimer le commentaire ?
+            </p>
+            <p style={{ color: '#888', fontSize: '13px', fontFamily: "'Space Grotesk', sans-serif", margin: '0 0 20px' }}>
+              Cette action est irreversible.
+            </p>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                onClick={() => setConfirmDeleteId(null)}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  borderRadius: '12px',
+                  background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  color: 'white',
+                  fontWeight: 600,
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  fontFamily: "'Space Grotesk', sans-serif",
+                }}
+              >
+                Annuler
+              </button>
+              <button
+                onClick={() => {
+                  const id = confirmDeleteId;
+                  setConfirmDeleteId(null);
+                  deleteComment(id);
+                }}
+                disabled={deletingId === confirmDeleteId}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  borderRadius: '12px',
+                  background: 'linear-gradient(135deg, #FF3B5C, #c0135e)',
+                  border: 'none',
+                  color: 'white',
+                  fontWeight: 700,
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  fontFamily: "'Space Grotesk', sans-serif",
+                  opacity: deletingId === confirmDeleteId ? 0.5 : 1,
+                }}
+              >
+                {deletingId === confirmDeleteId ? 'Suppression...' : 'Supprimer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

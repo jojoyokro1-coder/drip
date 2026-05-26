@@ -36,30 +36,30 @@ const users = [
 ];
 
 const looksData = [
-  { username: 'streetking', description: 'Oversized hoodie avec un baggy cargo #streetwear #baggy', imageSeed: 1 },
-  { username: 'streetking', description: 'Fresh sneakers fit pour le daily #sneakers #ootd', imageSeed: 2 },
-  { username: 'streetking', description: 'Layered look automne/hiver #layering #fall', imageSeed: 3 },
-  { username: 'parisianvibe', description: 'Soirée parisienne avec un blazer oversize #paris #soiree', imageSeed: 4 },
-  { username: 'parisianvibe', description: 'Casual chic en terrasse #paris #casualchic', imageSeed: 5 },
-  { username: 'urbanflex', description: 'Nouveau pickup, trop clean #pickup #sneakers', imageSeed: 6 },
-  { username: 'urbanflex', description: 'Gym fit avant la session #gym #fitness', imageSeed: 7 },
-  { username: 'minimalwave', description: 'Less is more. Monochrome today #minimal #monochrome', imageSeed: 8 },
-  { username: 'minimalwave', description: 'Neutral tones pour ce dimanche #minimal #neutral', imageSeed: 9 },
-  { username: 'vintagelens', description: 'Thrift find de la semaine #vintage #thrift', imageSeed: 10 },
-  { username: 'vintagelens', description: 'Denim on denim #denim #vintage', imageSeed: 11 },
-  { username: 'techwearpro', description: 'Techwear cargo avec des straps #techwear #cargo', imageSeed: 12 },
-  { username: 'techwearpro', description: 'All black, toujours #techwear #black', imageSeed: 13 },
+  { username: 'streetking', description: 'Nike Air Max TN + carhartt cargo + hoodie vintage #streetwear #sneakers', imageSeed: 1 },
+  { username: 'streetking', description: 'New Balance 990v4 avec un jean large et t-shirt graphique #sneakers #nb', imageSeed: 2 },
+  { username: 'streetking', description: 'Parka militaire + boots + echarpe épaisse pour les jours froids #layering #fall', imageSeed: 3 },
+  { username: 'parisianvibe', description: 'Blazer Zara lin + t-shirt blanc + jeans slim #paris #soiree', imageSeed: 4 },
+  { username: 'parisianvibe', description: 'Manteau long en laine + bottines + sac en cuir #paris #casualchic', imageSeed: 5 },
+  { username: 'urbanflex', description: 'Nike Tech Fleece + Air Force 1 — le combo ultime #techfleece #sneakers', imageSeed: 6 },
+  { username: 'urbanflex', description: 'Ensemble training Nike Dri-FIT + capuche pour le sport #gym #fitness', imageSeed: 7 },
+  { username: 'minimalwave', description: 'Chemise blanche oxford + pantalon beige + richelieus #minimal #monochrome', imageSeed: 8 },
+  { username: 'minimalwave', description: 'Pull col roulé beige + pantalon noir en lin #minimal #neutral', imageSeed: 9 },
+  { username: 'vintagelens', description: 'Blouson en cuir marron trouve en fripe + boots vintage #vintage #thrift', imageSeed: 10 },
+  { username: 'vintagelens', description: 'Jean brut 100% coton + chemise a carreaux #denim #vintage', imageSeed: 11 },
+  { username: 'techwearpro', description: 'Veste Acronym + cargo utilitaire + Nike SFB #techwear #cargo', imageSeed: 12 },
+  { username: 'techwearpro', description: 'Gilet tactique + pantalon à soufflets + bottes noires #techwear #black', imageSeed: 13 },
 ];
 
 const commentsData = [
   { from: 'streetking', toLookIdx: 0, content: 'Propre ! 🔥' },
-  { from: 'parisianvibe', toLookIdx: 0, content: 'Trop stylé' },
-  { from: 'urbanflex', toLookIdx: 1, content: 'Les sneakers sont folles' },
+  { from: 'parisianvibe', toLookIdx: 0, content: 'Les TN sont trop propres' },
+  { from: 'urbanflex', toLookIdx: 1, content: 'Les 990v4 sont folles' },
   { from: 'minimalwave', toLookIdx: 3, content: 'Très parisien comme vibe' },
-  { from: 'vintagelens', toLookIdx: 2, content: 'J adore le layering' },
-  { from: 'techwearpro', toLookIdx: 11, content: 'Clean le techwear' },
-  { from: 'streetking', toLookIdx: 4, content: 'Paris toujours' },
-  { from: 'parisianvibe', toLookIdx: 7, content: 'Le monochrome est parfait' },
+  { from: 'vintagelens', toLookIdx: 2, content: 'J adore la parka' },
+  { from: 'techwearpro', toLookIdx: 11, content: 'Acronym c est le feu' },
+  { from: 'streetking', toLookIdx: 4, content: 'Le manteau est incroyable' },
+  { from: 'parisianvibe', toLookIdx: 8, content: 'Le pull col roulé est parfait' },
 ];
 
 function getPlaceholderImage(seed: number): string {

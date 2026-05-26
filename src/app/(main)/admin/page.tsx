@@ -79,12 +79,20 @@ function AdminAccessDenied() {
           <p className="mx-auto mt-3 max-w-xs text-sm leading-6 text-white/58">
             Cette zone est reservee aux administrateurs DRIP.
           </p>
-          <Link
-            href="/admin/login"
-            className="mt-6 inline-flex min-h-12 items-center justify-center rounded-2xl bg-gradient-to-r from-[#ff3b5c] to-[#b5179e] px-6 text-sm font-black text-white shadow-[0_16px_45px_rgba(255,59,92,0.35)]"
-          >
-            Se connecter
-          </Link>
+          <div className="mt-6 flex flex-col gap-3">
+            <Link
+              href="/admin/login"
+              className="inline-flex min-h-12 items-center justify-center rounded-2xl bg-gradient-to-r from-[#ff3b5c] to-[#b5179e] px-6 text-sm font-black text-white shadow-[0_16px_45px_rgba(255,59,92,0.35)]"
+            >
+              Se connecter en tant qu'administrateur
+            </Link>
+            <Link
+              href="/"
+              className="inline-flex min-h-12 items-center justify-center rounded-2xl border border-white/20 px-6 text-sm font-semibold text-white/70 transition-colors hover:border-white/40 hover:text-white"
+            >
+              Retour a l'accueil
+            </Link>
+          </div>
         </div>
       </section>
     </main>
