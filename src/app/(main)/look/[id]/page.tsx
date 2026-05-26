@@ -11,7 +11,6 @@ import LikeButton from "@/components/like-button";
 import FollowButton from "@/components/follow-button";
 import UserAvatar from "@/components/user-avatar";
 import { CommentsDrawer } from "@/components/comments-drawer";
-import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronLeft, Share2, Bookmark, MoreHorizontal,
   MessageCircle, Calendar, Trash2
@@ -51,7 +50,6 @@ export default function LookDetailPage() {
 
   const [liked, setLiked] = useState(false);
   const [likesCount, setLikesCount] = useState(0);
-  const [likeLoading, setLikeLoading] = useState(false);
   const [hearts, setHearts] = useState<HeartAnimation[]>([]);
   const [commentOpen, setCommentOpen] = useState(false);
   const [commentCount, setCommentCount] = useState(0);
@@ -79,32 +77,6 @@ export default function LookDetailPage() {
       .then(({ data }) => setLiked(!!data));
   }, [look, user]);
 
-  const handleLikeToggle = async () => {
-    if (!look || !user || likeLoading) return;
-    setLikeLoading(true);
-
-    const isLiking = !liked;
-    const previousCount = Math.max(0, likesCount);
-    const nextCount = isLiking ? previousCount + 1 : Math.max(0, previousCount - 1);
-    setLiked(isLiking);
-    setLikesCount(nextCount);
-
-    try {
-      if (isLiking) {
-        await supabase.from("likes").insert({ look_id: look.id, user_id: user.id });
-      } else {
-        await supabase.from("likes").delete().eq("look_id", look.id).eq("user_id", user.id);
-      }
-      await supabase.from("looks").update({ likes_count: nextCount }).eq("id", look.id);
-    } catch (err) {
-      console.error("Error toggling like:", err);
-      setLiked(!isLiking);
-      setLikesCount(previousCount);
-    } finally {
-      setLikeLoading(false);
-    }
-  };
-
   const handleTap = (e: React.MouseEvent<HTMLDivElement>) => {
     const now = Date.now();
     const DOUBLE_PRESS_DELAY = 300;
@@ -116,6 +88,34 @@ export default function LookDetailPage() {
       handleDoubleTap(x, y);
     }
     lastTap.current = now;
+  };
+
+  const toggleLike = async () => {
+    if (!look || !user) return;
+    const token = (await supabase.auth.getSession())?.data?.session?.access_token;
+    if (!token) return;
+
+    const isLiking = !liked;
+    setLiked(isLiking);
+    setLikesCount((c) => isLiking ? c + 1 : Math.max(0, c - 1));
+
+    try {
+      const res = await fetch('/api/likes', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lookId: look.id }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setLiked(Boolean(data.liked));
+        setLikesCount(Math.max(0, data.count));
+      } else {
+        throw new Error(data?.error || 'Error');
+      }
+    } catch (err) {
+      setLiked(!isLiking);
+      setLikesCount((c) => isLiking ? Math.max(0, c - 1) : c + 1);
+    }
   };
 
   const handleDoubleTap = async (x: number, y: number) => {
@@ -138,19 +138,7 @@ export default function LookDetailPage() {
     }
 
     if (!liked) {
-        setLikeLoading(true);
-        setLiked(true);
-        setLikesCount((c) => c + 1);
-      try {
-        await supabase.from("likes").insert({ look_id: look.id, user_id: user.id });
-        await supabase.from("looks").update({ likes_count: Math.max(0, likesCount) + 1 }).eq("id", look.id);
-      } catch (err) {
-        console.error("Error liking via double tap:", err);
-        setLiked(false);
-        setLikesCount((c) => Math.max(0, c - 1));
-      } finally {
-        setLikeLoading(false);
-      }
+      toggleLike();
     }
   };
 
@@ -454,7 +442,7 @@ export default function LookDetailPage() {
           display: "flex", alignItems: "center",
           gap: "12px", marginBottom: "24px",
         }}>
-          <LikeButton lookId={look.id} initialCount={Math.max(0, look.likes_count || 0)} />
+          <LikeButton lookId={look.id} initialLiked={liked} initialCount={Math.max(0, look.likes_count || 0)} onLikeToggle={toggleLike} />
 
           <button
             onClick={() => setCommentOpen(true)}
@@ -555,11 +543,12 @@ function OtherLooks({
       </div>
 
       <div style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(3, 1fr)",
+        display: "flex",
+        flexDirection: "row",
         gap: "4px",
         borderRadius: "16px",
-        overflow: "hidden",
+        overflowX: "auto",
+        paddingBottom: "4px",
       }}>
         {looks.map((l) => (
           <Link key={l.id} href={`/look/${l.id}`} style={{ aspectRatio: "1", display: "block", overflow: "hidden", position: "relative" }}>
