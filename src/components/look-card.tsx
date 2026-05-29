@@ -554,13 +554,11 @@ export function LookCard({ look, userLiked = false, variant = 'feed', onCommentC
         </div>
 
         {/* Like */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-          <LikeButton
-            lookId={look.id}
-            liked={liked}
-            count={likesCount}
-            onLikeToggle={handleLikeToggle}
-          />
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }} onClick={handleLikeToggle}>
+          <button style={{ background: liked ? 'linear-gradient(135deg, rgba(255,59,92,0.2), rgba(255,59,92,0.08))' : 'rgba(255,255,255,0.05)', border: liked ? '1px solid rgba(255,59,92,0.4)' : '1px solid rgba(255,255,255,0.08)', borderRadius: '100px', width: '44px', height: '44px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Heart size={20} color={liked ? '#FF3B5C' : 'white'} />
+          </button>
+          <span style={{ color: 'white', fontSize: '12px', fontWeight: 500 }}>{likesCount}</span>
         </div>
 
         {/* Share */}

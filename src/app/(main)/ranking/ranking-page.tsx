@@ -256,9 +256,10 @@ const filterBarStyle: React.CSSProperties = {
   display: 'flex',
   gap: '8px',
   padding: '0 16px 24px',
-  overflowX: 'auto',
+  overflowX: 'hidden',
   scrollbarWidth: 'none',
   justifyContent: 'center',
+  WebkitOverflowScrolling: 'touch',
 };
 
 const glowCenter: React.CSSProperties = {
